@@ -26,60 +26,6 @@ type logEntity struct {
 	skipLines int
 }
 
-func (l *logEntity) toText(msg string) (string, string) {
-	output := ""
-	// painted output
-	pOutput := ""
-	for index, f := range l.fields {
-		if index != 0 {
-			output += l.separator
-			pOutput += l.separator
-		}
-
-		s, ps := f.Text(&msg)
-		output += s
-		pOutput += ps
-
-		s, ps = f.ToString()
-		output += s
-		pOutput += ps
-	}
-	for count := l.skipLines; count >= 0; count-- {
-		output += "\n"
-		pOutput += "\n"
-	}
-	return output, pOutput
-}
-
-func (l *logEntity) toJson(msg string) (string, string) {
-	output := "{"
-	// painted output
-	pOutput := "{"
-	for index, f := range l.fields {
-		if index != 0 {
-			output += ", "
-			pOutput += ", "
-		}
-
-		value, pValue := f.Text(&msg)
-		s, ps := f.ToString()
-		value += s
-		pValue += ps
-
-		key, pKey := f.Key()
-		output += fmt.Sprintf(`"%s": "%s"`, key, value)
-		pOutput += fmt.Sprintf(`"%s": "%s"`, pKey, pValue)
-	}
-	output += "}"
-	pOutput += "}"
-
-	for count := l.skipLines; count >= 0; count-- {
-		output += "\n"
-		pOutput += "\n"
-	}
-	return output, pOutput
-}
-
 type logger struct {
 	opts     Options
 	entities map[LogLevel]*logEntity
@@ -114,13 +60,12 @@ func (l *logger) Log(level LogLevel, msg ...interface{}) {
 	var errs string
 	var available []backend.Backend
 	for _, b := range l.opts.Backends {
-		var messages []byte
+		var err error
 		if b.AllowANSI() {
-			messages = plogs
+			_, err = b.Write(plogs)
 		} else {
-			messages = logs
+			_, err = b.Write(logs)
 		}
-		_, err := b.Write(messages)
 		if err != nil {
 			errs += fmt.Sprintf("%T writer error: %s.", b, err)
 		} else {

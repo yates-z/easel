@@ -1,5 +1,7 @@
 package logger
 
+import "context"
+
 var DefaultLogger Loggable = nil
 
 func Debug(msg ...interface{}) {
@@ -22,6 +24,10 @@ func Fatal(msg ...interface{}) {
 	DefaultLogger.Log(FatalLevel, msg...)
 }
 
+func Panic(msg ...interface{}) {
+	DefaultLogger.Log(PanicLevel, msg...)
+}
+
 func Debugf(format string, fmtArgs ...interface{}) {
 	DefaultLogger.Logf(DebugLevel, format, fmtArgs...)
 }
@@ -40,6 +46,14 @@ func Errorf(format string, fmtArgs ...interface{}) {
 
 func Fatalf(format string, fmtArgs ...interface{}) {
 	DefaultLogger.Logf(FatalLevel, format, fmtArgs...)
+}
+
+func Panicf(format string, fmtArgs ...interface{}) {
+	DefaultLogger.Logf(PanicLevel, format, fmtArgs...)
+}
+
+func Context(ctx context.Context) Logger {
+	return DefaultLogger.Context(ctx)
 }
 
 func UseDefault() {

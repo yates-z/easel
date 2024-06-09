@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"easel/logger/backend"
+	"github.com/yates-z/easel/logger/backend"
 )
 
 type Option func(*Options)

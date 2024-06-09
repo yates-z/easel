@@ -1,14 +1,20 @@
 package logger
 
 import (
-	"easel/logger/backend"
+	"context"
 	"fmt"
+	"github.com/yates-z/easel/logger/backend"
 	"os"
 )
+
+func init() {
+	UseDefault()
+}
 
 type Loggable interface {
 	Log(level LogLevel, msg ...interface{})
 	Logf(level LogLevel, format string, fmtArgs ...interface{})
+	Context(ctx context.Context) Logger
 }
 
 type Logger interface {
@@ -16,6 +22,19 @@ type Logger interface {
 	Backends() []backend.Backend
 	Mode() LogMode
 	Level() LogLevel
+
+	Debug(msg ...interface{})
+	Debugf(format string, fmtArgs ...interface{})
+	Warn(msg ...interface{})
+	Warnf(format string, fmtArgs ...interface{})
+	Info(msg ...interface{})
+	Infof(format string, fmtArgs ...interface{})
+	Error(msg ...interface{})
+	Errorf(format string, fmtArgs ...interface{})
+	Fatal(msg ...interface{})
+	Fatalf(format string, fmtArgs ...interface{})
+	Panic(msg ...interface{})
+	Panicf(format string, fmtArgs ...interface{})
 }
 
 type logEntity struct {
@@ -28,6 +47,7 @@ type logEntity struct {
 
 type logger struct {
 	opts     Options
+	ctx      context.Context
 	entities map[LogLevel]*logEntity
 }
 
@@ -42,6 +62,11 @@ func (l *logger) Backends() []backend.Backend {
 func (l *logger) Mode() LogMode {
 	//TODO implement me
 	panic("implement me")
+}
+
+func (l *logger) Context(ctx context.Context) Logger {
+	l.ctx = ctx
+	return l
 }
 
 func (l *logger) Log(level LogLevel, msg ...interface{}) {
@@ -158,6 +183,54 @@ func (l *logger) Logf(level LogLevel, format string, fmtArgs ...interface{}) {
 	}
 }
 
+func (l *logger) Debug(msg ...interface{}) {
+	l.Log(DebugLevel, msg...)
+}
+
+func (l *logger) Debugf(format string, fmtArgs ...interface{}) {
+	l.Logf(DebugLevel, format, fmtArgs...)
+}
+
+func (l *logger) Info(msg ...interface{}) {
+	l.Log(InfoLevel, msg...)
+}
+
+func (l *logger) Infof(format string, fmtArgs ...interface{}) {
+	l.Logf(InfoLevel, format, fmtArgs...)
+}
+
+func (l *logger) Warn(msg ...interface{}) {
+	l.Log(WarnLevel, msg...)
+}
+
+func (l *logger) Warnf(format string, fmtArgs ...interface{}) {
+	l.Logf(WarnLevel, format, fmtArgs...)
+}
+
+func (l *logger) Error(msg ...interface{}) {
+	l.Log(ErrorLevel, msg...)
+}
+
+func (l *logger) Errorf(format string, fmtArgs ...interface{}) {
+	l.Logf(ErrorLevel, format, fmtArgs...)
+}
+
+func (l *logger) Fatal(msg ...interface{}) {
+	l.Log(FatalLevel, msg...)
+}
+
+func (l *logger) Fatalf(format string, fmtArgs ...interface{}) {
+	l.Logf(FatalLevel, format, fmtArgs...)
+}
+
+func (l *logger) Panic(msg ...interface{}) {
+	l.Log(PanicLevel, msg...)
+}
+
+func (l *logger) Panicf(format string, fmtArgs ...interface{}) {
+	l.Logf(PanicLevel, format, fmtArgs...)
+}
+
 func NewLogger(opts ...Option) Logger {
 	// handle options.
 	options := Options{
@@ -187,6 +260,7 @@ func NewLogger(opts ...Option) Logger {
 	// new logger instance.
 	inst := &logger{
 		opts:     options,
+		ctx:      context.Background(),
 		entities: map[LogLevel]*logEntity{},
 	}
 	for _, level := range options.Level.Enum() {

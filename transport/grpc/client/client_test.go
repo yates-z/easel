@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"github.com/yates-z/easel/api"
 	"github.com/yates-z/easel/transport/grpc/client/interceptor/retry"
+	"github.com/yates-z/easel/transport/grpc/client/interceptor/timeout"
 	"testing"
 	"time"
 )
 
 func TestNewClient(t *testing.T) {
-	client, err := NewClient(
-		WithInsecure(),
-		WithTarget("127.0.0.1:9100"),
+	client, err := NewInsecureClient(
+		"127.0.0.1:9100",
 		UnaryInterceptor(
-			//timeout.UnaryClientInterceptor(time.Second),
-			retry.UnaryClientInterceptor(retry.WithMax(5), retry.WithPerRetryTimeout(time.Second)),
+			timeout.UnaryClientInterceptor(0),
+			retry.UnaryClientInterceptor(5, time.Second, retry.WithPerRetryTimeout(time.Second)),
 		),
 	)
 

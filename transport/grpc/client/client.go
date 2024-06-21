@@ -67,3 +67,8 @@ func NewClient(opts ...DialOption) (*grpc.ClientConn, error) {
 
 	return grpc.NewClient(options.target, options._opts...)
 }
+
+func NewInsecureClient(target string, opts ...DialOption) (*grpc.ClientConn, error) {
+	opts = slices.Concat([]DialOption{WithInsecure(), WithTarget(target)}, opts)
+	return NewClient(opts...)
+}

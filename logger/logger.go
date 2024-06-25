@@ -45,6 +45,24 @@ type logEntity struct {
 	skipLines int
 }
 
+func (e *logEntity) convertToLog(msg ...interface{}) []byte {
+	var logs []byte
+	for _, encoder := range e.encoders {
+		log := encoder.Encode(fmt.Sprint(msg...))
+		logs = append(logs, []byte(log)...)
+	}
+	return logs
+}
+
+func (e *logEntity) convertToColoredLog(msg ...interface{}) []byte {
+	var logs []byte
+	for _, encoder := range e.encoders {
+		log := encoder.EncodeWithColor(fmt.Sprint(msg...))
+		logs = append(logs, []byte(log)...)
+	}
+	return logs
+}
+
 type logger struct {
 	opts     Options
 	ctx      context.Context
@@ -75,19 +93,18 @@ func (l *logger) Log(level LogLevel, msg ...interface{}) {
 	}
 	entity := l.entities[level]
 
-	var logs, plogs []byte
-	for _, encoder := range entity.encoders {
-		log, plog := encoder.Encode(fmt.Sprint(msg...))
-		logs = append(logs, []byte(log)...)
-		plogs = append(plogs, []byte(plog)...)
-	}
+	var logs, coloredLogs []byte
+	logs = entity.convertToLog(msg...)
 
 	var errs string
 	var available []backend.Backend
 	for _, b := range l.opts.Backends {
 		var err error
 		if b.AllowANSI() {
-			_, err = b.Write(plogs)
+			if len(coloredLogs) == 0 {
+				coloredLogs = entity.convertToColoredLog(msg...)
+			}
+			_, err = b.Write(coloredLogs)
 		} else {
 			_, err = b.Write(logs)
 		}
@@ -101,15 +118,14 @@ func (l *logger) Log(level LogLevel, msg ...interface{}) {
 		// broadcast errors
 		entity = l.entities[ErrorLevel]
 
-		for _, encoder := range entity.encoders {
-			log, plog := encoder.Encode(errs)
-			logs = append(logs, []byte(log)...)
-			plogs = append(plogs, []byte(plog)...)
-		}
+		logs = entity.convertToLog(errs)
 
 		for _, b := range available {
 			if b.AllowANSI() {
-				_, _ = b.Write(plogs)
+				if len(coloredLogs) == 0 {
+					coloredLogs = entity.convertToColoredLog(errs)
+				}
+				_, _ = b.Write(coloredLogs)
 			} else {
 				_, _ = b.Write(logs)
 			}
@@ -135,19 +151,18 @@ func (l *logger) Logf(level LogLevel, format string, fmtArgs ...interface{}) {
 	}
 
 	entity := l.entities[level]
-	var logs, plogs []byte
-	for _, encoder := range entity.encoders {
-		log, plog := encoder.Encode(format)
-		logs = append(logs, []byte(log)...)
-		plogs = append(plogs, []byte(plog)...)
-	}
+	var logs, coloredLogs []byte
+	logs = entity.convertToLog(format)
 
 	var errs string
 	var available []backend.Backend
 	for _, b := range l.opts.Backends {
 		var err error
 		if b.AllowANSI() {
-			_, err = b.Write(plogs)
+			if len(coloredLogs) == 0 {
+				coloredLogs = entity.convertToColoredLog(format)
+			}
+			_, err = b.Write(coloredLogs)
 		} else {
 			_, err = b.Write(logs)
 		}
@@ -160,15 +175,14 @@ func (l *logger) Logf(level LogLevel, format string, fmtArgs ...interface{}) {
 	if len(errs) != 0 {
 		// broadcast errors
 		entity = l.entities[ErrorLevel]
-		for _, encoder := range entity.encoders {
-			log, plog := encoder.Encode(errs)
-			logs = append(logs, []byte(log)...)
-			plogs = append(plogs, []byte(plog)...)
-		}
+		logs = entity.convertToLog(errs)
 
 		for _, b := range available {
 			if b.AllowANSI() {
-				_, _ = b.Write(plogs)
+				if len(coloredLogs) == 0 {
+					coloredLogs = entity.convertToColoredLog(errs)
+				}
+				_, _ = b.Write(coloredLogs)
 			} else {
 				_, _ = b.Write(logs)
 			}

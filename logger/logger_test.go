@@ -41,6 +41,15 @@ func TestColor(t *testing.T) {
 			DatetimeField("datetime").Color(Green).Build(),
 			ShortFileField("file").Color(Black).Background(Magenta).Build(),
 			MessageField("msg").Background(Yellow).Build(),
+			Group("sys_info",
+				CustomField("go_version").Handle(func() string {
+					buildinfo, _ := debug.ReadBuildInfo()
+					return buildinfo.GoVersion
+				}).Color(Red).Build(),
+				Group("sys", CustomField("pid").Handle(func() string {
+					return fmt.Sprintf("%d", os.Getpid())
+				}).Build()).Build(),
+			).Build(),
 		),
 		WithSeparator("   "),
 		WithEncoders(JsonEncoder(), PlainEncoder(), LogFmtEncoder()),

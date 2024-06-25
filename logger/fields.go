@@ -9,9 +9,9 @@ import (
 
 type LogField interface {
 	Key() string
-	ColoredKey() string
-	ToString() (s string, ps string)
-	Text(*string) (s string, ps string)
+	ToString() string
+	Text(*string) string
+	Color(text string) string
 	Children() []LogField
 }
 
@@ -30,23 +30,19 @@ func (f *Field) Key() string {
 	return f.key
 }
 
-func (f *Field) ColoredKey() string {
-	return f.paintString(f.key)
+func (f *Field) ToString() string {
+	return ""
 }
 
-func (f *Field) ToString() (s string, ps string) {
-	return
-}
-
-func (f *Field) Text(_ *string) (s string, ps string) {
-	return
+func (f *Field) Text(_ *string) string {
+	return ""
 }
 
 func (f *Field) Children() []LogField {
 	return f.children
 }
 
-func (f *Field) paintString(text string) string {
+func (f *Field) Color(text string) string {
 
 	if !f.color.IsDefault() && f.background.IsDefault() {
 		// only foreground color
@@ -72,14 +68,12 @@ type levelField struct {
 	upper bool
 }
 
-func (f *levelField) ToString() (s string, ps string) {
-	s = f.entity.level.String()
+func (f *levelField) ToString() string {
+	s := f.entity.level.String()
 	if f.upper {
 		s = strings.ToUpper(s)
 	}
-
-	ps = f.paintString(s)
-	return
+	return s
 }
 
 type levelFieldBuilder struct {
@@ -135,13 +129,12 @@ type datetimeField struct {
 	layout string
 }
 
-func (f *datetimeField) ToString() (s string, ps string) {
+func (f *datetimeField) ToString() string {
 	if f.layout == "" {
 		f.layout = "2006-01-02 15:04:05.000"
 	}
-	s = time.Now().Format(f.layout)
-	ps = f.paintString(s)
-	return
+	s := time.Now().Format(f.layout)
+	return s
 }
 
 type datetimeFieldBuilder struct {
@@ -190,8 +183,8 @@ const (
 	UnixNano
 )
 
-func (f *timeField) ToString() (s string, ps string) {
-	s = fmt.Sprintf("%d", time.Now().UnixMilli())
+func (f *timeField) ToString() string {
+	s := fmt.Sprintf("%d", time.Now().UnixMilli())
 	switch f.t {
 	case Unix:
 		s = fmt.Sprintf("%d", time.Now().Unix())
@@ -202,8 +195,7 @@ func (f *timeField) ToString() (s string, ps string) {
 	case UnixNano:
 		s = fmt.Sprintf("%d", time.Now().UnixNano())
 	}
-	ps = f.paintString(s)
-	return
+	return s
 }
 
 type timeField struct {
@@ -251,14 +243,8 @@ type messageField struct {
 	Field
 }
 
-func (f *messageField) ToString() (s string, ps string) {
-	return
-}
-
-func (f *messageField) Text(text *string) (s string, ps string) {
-	s = *text
-	ps = f.paintString(s)
-	return
+func (f *messageField) Text(text *string) string {
+	return *text
 }
 
 type messageFieldBuilder struct {
@@ -296,15 +282,14 @@ type longFileField struct {
 	Field
 }
 
-func (f *longFileField) ToString() (s string, ps string) {
+func (f *longFileField) ToString() string {
 	_, file, line, ok := runtime.Caller(4)
 	if !ok {
 		file = "???"
 		line = 0
 	}
-	s = fmt.Sprintf("%s %d", file, line)
-	ps = f.paintString(s)
-	return
+	s := fmt.Sprintf("%s %d", file, line)
+	return s
 }
 
 type longFileFieldBuilder struct {
@@ -342,7 +327,7 @@ type shortFileField struct {
 	Field
 }
 
-func (f *shortFileField) ToString() (s string, ps string) {
+func (f *shortFileField) ToString() string {
 	_, file, line, ok := runtime.Caller(4)
 	if !ok {
 		file = "???"
@@ -356,9 +341,8 @@ func (f *shortFileField) ToString() (s string, ps string) {
 		}
 	}
 	file = short
-	s = fmt.Sprintf("%s %d", file, line)
-	ps = f.paintString(s)
-	return
+	s := fmt.Sprintf("%s %d", file, line)
+	return s
 }
 
 type shortFileFieldBuilder struct {
@@ -398,13 +382,12 @@ type customField struct {
 	handler func() string
 }
 
-func (f *customField) ToString() (s string, ps string) {
+func (f *customField) ToString() string {
 	if f.handler == nil {
-		return
+		return ""
 	}
-	s = f.handler()
-	ps = f.paintString(s)
-	return
+	s := f.handler()
+	return s
 }
 
 type customFieldFieldBuilder struct {

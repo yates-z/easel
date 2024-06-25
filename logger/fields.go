@@ -8,10 +8,11 @@ import (
 )
 
 type LogField interface {
-	Key() (s string, ps string)
+	Key() string
+	ColoredKey() string
 	ToString() (s string, ps string)
 	Text(*string) (s string, ps string)
-	paintString(string) string
+	Children() []LogField
 }
 
 type FieldConstructor = func(entity *logEntity) LogField
@@ -21,16 +22,28 @@ type Field struct {
 	entity     *logEntity
 	color      Color
 	background Color
+
+	children []LogField
 }
 
-func (f *Field) Key() (s string, ps string) {
-	s = f.key
-	ps = f.paintString(s)
+func (f *Field) Key() string {
+	return f.key
+}
+
+func (f *Field) ColoredKey() string {
+	return f.paintString(f.key)
+}
+
+func (f *Field) ToString() (s string, ps string) {
 	return
 }
 
 func (f *Field) Text(_ *string) (s string, ps string) {
 	return
+}
+
+func (f *Field) Children() []LogField {
+	return f.children
 }
 
 func (f *Field) paintString(text string) string {
@@ -233,36 +246,36 @@ func TimeField(key string) *timeFieldBuilder {
 	return &timeFieldBuilder{field: f}
 }
 
-// ====== BodyField ======
-type bodyField struct {
+// ====== MessageField ======
+type messageField struct {
 	Field
 }
 
-func (f *bodyField) ToString() (s string, ps string) {
+func (f *messageField) ToString() (s string, ps string) {
 	return
 }
 
-func (f *bodyField) Text(text *string) (s string, ps string) {
+func (f *messageField) Text(text *string) (s string, ps string) {
 	s = *text
 	ps = f.paintString(s)
 	return
 }
 
-type bodyFieldBuilder struct {
-	field bodyField
+type messageFieldBuilder struct {
+	field messageField
 }
 
-func (f *bodyFieldBuilder) Color(color Color) *bodyFieldBuilder {
+func (f *messageFieldBuilder) Color(color Color) *messageFieldBuilder {
 	f.field.color = color
 	return f
 }
 
-func (f *bodyFieldBuilder) Background(color Color) *bodyFieldBuilder {
+func (f *messageFieldBuilder) Background(color Color) *messageFieldBuilder {
 	f.field.background = color.ToBackground()
 	return f
 }
 
-func (f *bodyFieldBuilder) Build() FieldConstructor {
+func (f *messageFieldBuilder) Build() FieldConstructor {
 
 	return func(entity *logEntity) LogField {
 		field := f.field
@@ -271,11 +284,11 @@ func (f *bodyFieldBuilder) Build() FieldConstructor {
 	}
 }
 
-func BodyField(key string) *bodyFieldBuilder {
-	f := bodyField{
+func MessageField(key string) *messageFieldBuilder {
+	f := messageField{
 		Field: Field{key: key},
 	}
-	return &bodyFieldBuilder{field: f}
+	return &messageFieldBuilder{field: f}
 }
 
 // ====== LongFileField ======
@@ -376,4 +389,86 @@ func ShortFileField(key string) *shortFileFieldBuilder {
 		Field: Field{key: key},
 	}
 	return &shortFileFieldBuilder{field: f}
+}
+
+// ====== CustomField ======
+
+type customField struct {
+	Field
+	handler func() string
+}
+
+func (f *customField) ToString() (s string, ps string) {
+	if f.handler == nil {
+		return
+	}
+	s = f.handler()
+	ps = f.paintString(s)
+	return
+}
+
+type customFieldFieldBuilder struct {
+	field customField
+}
+
+func (f *customFieldFieldBuilder) Handle(handler func() string) *customFieldFieldBuilder {
+	f.field.handler = handler
+	return f
+}
+
+func (f *customFieldFieldBuilder) Color(color Color) *customFieldFieldBuilder {
+	f.field.color = color
+	return f
+}
+
+func (f *customFieldFieldBuilder) Background(color Color) *customFieldFieldBuilder {
+	f.field.background = color.ToBackground()
+	return f
+}
+
+func (f *customFieldFieldBuilder) Build() FieldConstructor {
+
+	return func(entity *logEntity) LogField {
+		field := f.field
+		field.entity = entity
+		return &field
+	}
+}
+
+func CustomField(key string) *customFieldFieldBuilder {
+	f := customField{
+		Field: Field{key: key},
+	}
+	return &customFieldFieldBuilder{field: f}
+}
+
+// ====== Group ======
+
+type group struct {
+	Field
+	children []FieldConstructor
+}
+
+type groupFieldBuilder struct {
+	group group
+}
+
+func (g *groupFieldBuilder) Build() FieldConstructor {
+
+	return func(entity *logEntity) LogField {
+		group := g.group
+		group.entity = entity
+		for _, constructor := range group.children {
+			group.Field.children = append(group.Field.children, constructor(entity))
+		}
+		return &group
+	}
+}
+
+func Group(key string, fields ...FieldConstructor) *groupFieldBuilder {
+	g := group{
+		Field:    Field{key: key},
+		children: fields,
+	}
+	return &groupFieldBuilder{group: g}
 }

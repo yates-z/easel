@@ -251,7 +251,7 @@ func NewLogger(opts ...Option) Logger {
 			LevelField("level").Upper(true).Build(),
 			DatetimeField("datetime").Build(),
 			ShortFileField("file").Build(),
-			BodyField("body").Build(),
+			MessageField("body").Build(),
 		)
 	}
 	if len(options.Encoders) == 0 {

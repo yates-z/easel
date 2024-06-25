@@ -1,7 +1,10 @@
 package logger
 
 import (
+	"fmt"
 	"github.com/yates-z/easel/logger/backend"
+	"os"
+	"runtime/debug"
 	"testing"
 )
 
@@ -14,7 +17,7 @@ func TestLogger(t *testing.T) {
 			LevelField("level").Upper(true).Build(),
 			DatetimeField("datetime").Build(),
 			ShortFileField("file").Build(),
-			BodyField("body").Build(),
+			MessageField("msg").Build(),
 		),
 		WithSeparator(" "),
 		WithEncoders(PlainEncoder(), JsonEncoder()),
@@ -37,12 +40,39 @@ func TestColor(t *testing.T) {
 			LevelField("level").Upper(true).Color(Red).Background(Blue).Build(),
 			DatetimeField("datetime").Color(Green).Build(),
 			ShortFileField("file").Color(Black).Background(Magenta).Build(),
-			BodyField("body").Background(Yellow).Build(),
+			MessageField("msg").Background(Yellow).Build(),
 		),
 		WithSeparator("   "),
 		WithEncoders(JsonEncoder(), PlainEncoder(), LogFmtEncoder()),
 	)
 	logger.Log(DebugLevel, "this is a test")
 	logger.Log(WarnLevel, "this is a test", 123, 456, nil)
+	logger.Logf(ErrorLevel, "this is a %s test", "error")
+}
+
+func TestGroup(t *testing.T) {
+	logger := NewLogger(
+		WithLevel(InfoLevel),
+		WithBackends(backend.OSBackend().Build(), backend.DefaultFileBackend().Build()),
+		WithFields(
+			LevelField("level").Upper(true).Build(),
+			DatetimeField("datetime").Build(),
+			ShortFileField("file").Build(),
+			MessageField("msg").Build(),
+			Group("sys_info",
+				CustomField("go_version").Handle(func() string {
+					buildinfo, _ := debug.ReadBuildInfo()
+					return buildinfo.GoVersion
+				}).Build(),
+				Group("sys", CustomField("pid").Handle(func() string {
+					return fmt.Sprintf("%d", os.Getpid())
+				}).Build()).Build(),
+			).Build(),
+		),
+		WithSeparator(" "),
+		WithEncoders(PlainEncoder(), JsonEncoder(), LogFmtEncoder()),
+	)
+	logger.Log(DebugLevel, "this is a test")
+	logger.Log(WarnLevel, "this is a test", 123, 456)
 	logger.Logf(ErrorLevel, "this is a %s test", "error")
 }

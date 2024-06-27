@@ -7,28 +7,28 @@ import (
 
 var DefaultLogger Loggable = nil
 
-func Debug(msg ...interface{}) {
-	DefaultLogger.Log(DebugLevel, msg...)
+func Debug(msg string, args ...any) {
+	DefaultLogger.Log(DebugLevel, msg, args...)
 }
 
-func Info(msg ...interface{}) {
-	DefaultLogger.Log(InfoLevel, msg...)
+func Info(msg string, args ...any) {
+	DefaultLogger.Log(InfoLevel, msg, args...)
 }
 
-func Warn(msg ...interface{}) {
-	DefaultLogger.Log(WarnLevel, msg...)
+func Warn(msg string, args ...any) {
+	DefaultLogger.Log(WarnLevel, msg, args...)
 }
 
-func Error(msg ...interface{}) {
-	DefaultLogger.Log(ErrorLevel, msg...)
+func Error(msg string, args ...any) {
+	DefaultLogger.Log(ErrorLevel, msg, args...)
 }
 
-func Fatal(msg ...interface{}) {
-	DefaultLogger.Log(FatalLevel, msg...)
+func Fatal(msg string, args ...any) {
+	DefaultLogger.Log(FatalLevel, msg, args...)
 }
 
-func Panic(msg ...interface{}) {
-	DefaultLogger.Log(PanicLevel, msg...)
+func Panic(msg string, args ...any) {
+	DefaultLogger.Log(PanicLevel, msg, args...)
 }
 
 func Debugf(format string, fmtArgs ...interface{}) {
@@ -53,6 +53,30 @@ func Fatalf(format string, fmtArgs ...interface{}) {
 
 func Panicf(format string, fmtArgs ...interface{}) {
 	DefaultLogger.Logf(PanicLevel, format, fmtArgs...)
+}
+
+func Debugs(msg string, fields ...LogField) {
+	DefaultLogger.Logs(DebugLevel, msg, fields...)
+}
+
+func Infos(msg string, fields ...LogField) {
+	DefaultLogger.Logs(InfoLevel, msg, fields...)
+}
+
+func Warns(msg string, fields ...LogField) {
+	DefaultLogger.Logs(WarnLevel, msg, fields...)
+}
+
+func Errors(msg string, fields ...LogField) {
+	DefaultLogger.Logs(ErrorLevel, msg, fields...)
+}
+
+func Fatals(msg string, fields ...LogField) {
+	DefaultLogger.Logs(FatalLevel, msg, fields...)
+}
+
+func Panics(msg string, fields ...LogField) {
+	DefaultLogger.Logs(PanicLevel, msg, fields...)
 }
 
 func Context(ctx context.Context) Logger {

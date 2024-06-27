@@ -12,9 +12,9 @@ func init() {
 }
 
 type Loggable interface {
-	Log(level LogLevel, msg ...interface{})
-	Logf(level LogLevel, format string, fmtArgs ...interface{})
-	Logw(level LogLevel, msg string, fields ...LogField)
+	Log(level LogLevel, msg string, args ...any)
+	Logf(level LogLevel, format string, fmtArgs ...any)
+	Logs(level LogLevel, msg string, fields ...LogField)
 }
 
 type Logger interface {
@@ -22,24 +22,24 @@ type Logger interface {
 	Backends() []backend.Backend
 	Level() LogLevel
 	Context(ctx context.Context) Logger
-	Debug(msg ...interface{})
+	Debug(msg string, args ...any)
 	Debugf(format string, fmtArgs ...interface{})
-	Debugw(msg string, fields ...LogField)
-	Warn(msg ...interface{})
+	Debugs(msg string, fields ...LogField)
+	Warn(msg string, args ...any)
 	Warnf(format string, fmtArgs ...interface{})
-	Warnw(msg string, fields ...LogField)
-	Info(msg ...interface{})
+	Warns(msg string, fields ...LogField)
+	Info(msg string, args ...any)
 	Infof(format string, fmtArgs ...interface{})
-	Infow(msg string, fields ...LogField)
-	Error(msg ...interface{})
+	Infos(msg string, fields ...LogField)
+	Error(msg string, args ...any)
 	Errorf(format string, fmtArgs ...interface{})
-	Errorw(msg string, fields ...LogField)
-	Fatal(msg ...interface{})
+	Errors(msg string, fields ...LogField)
+	Fatal(msg string, args ...any)
 	Fatalf(format string, fmtArgs ...interface{})
-	Fatalw(msg string, fields ...LogField)
-	Panic(msg ...interface{})
+	Fatals(msg string, fields ...LogField)
+	Panic(msg string, args ...any)
 	Panicf(format string, fmtArgs ...interface{})
-	Panicw(msg string, fields ...LogField)
+	Panics(msg string, fields ...LogField)
 }
 
 type logger struct {
@@ -48,19 +48,21 @@ type logger struct {
 	entities map[LogLevel]*logEntity
 }
 
-func (l *logger) Log(level LogLevel, msg ...interface{}) {
+func (l *logger) Log(level LogLevel, msg string, args ...any) {
 	if !l.level.Enabled(level) {
 		return
 	}
 	entity := l.entities[level]
-	errs, available := entity.log(fmt.Sprint(msg...))
+	msg = fmt.Sprint(msg, fmt.Sprint(args...))
+
+	errs, available := entity.log(&msg)
 	l.entities[ErrorLevel].handleError(errs, available)
 
 	if level.Eq(FatalLevel) {
 		os.Exit(1)
 	}
 	if level.Eq(PanicLevel) {
-		panic(fmt.Sprint(msg...))
+		panic(fmt.Sprint(msg, args))
 	}
 }
 
@@ -74,7 +76,7 @@ func (l *logger) Logf(level LogLevel, format string, fmtArgs ...interface{}) {
 	}
 
 	entity := l.entities[level]
-	errs, available := entity.log(format)
+	errs, available := entity.log(&format)
 	l.entities[ErrorLevel].handleError(errs, available)
 
 	if level.Eq(FatalLevel) {
@@ -85,9 +87,22 @@ func (l *logger) Logf(level LogLevel, format string, fmtArgs ...interface{}) {
 	}
 }
 
-func (l *logger) Logw(level LogLevel, msg string, fields ...LogField) {
-	//TODO implement me
-	panic("implement me")
+func (l *logger) Logs(level LogLevel, msg string, fields ...LogField) {
+	if !l.level.Enabled(level) {
+		return
+	}
+	entity := l.entities[level].copy()
+	entity.opts.fields = append(entity.opts.fields, fields...)
+
+	errs, available := entity.log(&msg)
+	l.entities[ErrorLevel].handleError(errs, available)
+
+	if level.Eq(FatalLevel) {
+		os.Exit(1)
+	}
+	if level.Eq(PanicLevel) {
+		panic(msg)
+	}
 }
 
 func (l *logger) Context(ctx context.Context) Logger {
@@ -104,76 +119,76 @@ func (l *logger) Level() LogLevel {
 	return l.level
 }
 
-func (l *logger) Debug(msg ...interface{}) {
-	l.Log(DebugLevel, msg...)
+func (l *logger) Debug(msg string, args ...any) {
+	l.Log(DebugLevel, msg, args...)
 }
 
 func (l *logger) Debugf(format string, fmtArgs ...interface{}) {
 	l.Logf(DebugLevel, format, fmtArgs...)
 }
 
-func (l *logger) Debugw(msg string, fields ...LogField) {
-	l.Logw(DebugLevel, msg, fields...)
+func (l *logger) Debugs(msg string, fields ...LogField) {
+	l.Logs(DebugLevel, msg, fields...)
 }
 
-func (l *logger) Info(msg ...interface{}) {
-	l.Log(InfoLevel, msg...)
+func (l *logger) Info(msg string, args ...any) {
+	l.Log(InfoLevel, msg, args...)
 }
 
 func (l *logger) Infof(format string, fmtArgs ...interface{}) {
 	l.Logf(InfoLevel, format, fmtArgs...)
 }
 
-func (l *logger) Infow(msg string, fields ...LogField) {
-	l.Logw(InfoLevel, msg, fields...)
+func (l *logger) Infos(msg string, fields ...LogField) {
+	l.Logs(InfoLevel, msg, fields...)
 }
 
-func (l *logger) Warn(msg ...interface{}) {
-	l.Log(WarnLevel, msg...)
+func (l *logger) Warn(msg string, args ...any) {
+	l.Log(WarnLevel, msg, args...)
 }
 
 func (l *logger) Warnf(format string, fmtArgs ...interface{}) {
 	l.Logf(WarnLevel, format, fmtArgs...)
 }
 
-func (l *logger) Warnw(msg string, fields ...LogField) {
-	l.Logw(WarnLevel, msg, fields...)
+func (l *logger) Warns(msg string, fields ...LogField) {
+	l.Logs(WarnLevel, msg, fields...)
 }
 
-func (l *logger) Error(msg ...interface{}) {
-	l.Log(ErrorLevel, msg...)
+func (l *logger) Error(msg string, args ...any) {
+	l.Log(ErrorLevel, msg, args...)
 }
 
 func (l *logger) Errorf(format string, fmtArgs ...interface{}) {
 	l.Logf(ErrorLevel, format, fmtArgs...)
 }
 
-func (l *logger) Errorw(msg string, fields ...LogField) {
-	l.Logw(ErrorLevel, msg, fields...)
+func (l *logger) Errors(msg string, fields ...LogField) {
+	l.Logs(ErrorLevel, msg, fields...)
 }
 
-func (l *logger) Fatal(msg ...interface{}) {
-	l.Log(FatalLevel, msg...)
+func (l *logger) Fatal(msg string, args ...any) {
+	l.Log(FatalLevel, msg, args...)
 }
 
 func (l *logger) Fatalf(format string, fmtArgs ...interface{}) {
 	l.Logf(FatalLevel, format, fmtArgs...)
 }
 
-func (l *logger) Fatalw(msg string, fields ...LogField) {
-	l.Logw(FatalLevel, msg, fields...)
+func (l *logger) Fatals(msg string, fields ...LogField) {
+	l.Logs(FatalLevel, msg, fields...)
 }
 
-func (l *logger) Panic(msg ...interface{}) {
-	l.Log(PanicLevel, msg...)
+func (l *logger) Panic(msg string, args ...any) {
+	l.Log(PanicLevel, msg, args...)
 }
 
 func (l *logger) Panicf(format string, fmtArgs ...interface{}) {
 	l.Logf(PanicLevel, format, fmtArgs...)
 }
 
-func (l *logger) Panicw(msg string, fields ...LogField) {
-	l.Logw(PanicLevel, msg, fields...)
+func (l *logger) Panics(msg string, fields ...LogField) {
+	l.Logs(PanicLevel, msg, fields...)
 }
 
 func NewLogger(opts ...Option) Logger {

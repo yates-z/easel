@@ -11,10 +11,10 @@ type logEntity struct {
 	opts  *entityOptions
 }
 
-func (e *logEntity) preLog(msg string, withColor bool) []byte {
+func (e *logEntity) preLog(msg *string, withColor bool) []byte {
 	var logs []byte
 	for _, encoder := range e.opts.encoders {
-		log := encoder.Encode(newRecord(e, &msg, withColor))
+		log := encoder.Encode(newRecord(e, msg, withColor))
 		for count := e.opts.skipLines; count >= 0; count-- {
 			log += "\n"
 		}
@@ -23,7 +23,7 @@ func (e *logEntity) preLog(msg string, withColor bool) []byte {
 	return logs
 }
 
-func (e *logEntity) log(msg string) (errs []error, available map[backend.Backend]struct{}) {
+func (e *logEntity) log(msg *string) (errs []error, available map[backend.Backend]struct{}) {
 	var coloredLogs []byte
 	logs := e.preLog(msg, false)
 	available = make(map[backend.Backend]struct{})
@@ -57,7 +57,7 @@ func (e *logEntity) handleError(errs []error, available map[backend.Backend]stru
 	}
 	entity := e.copy()
 	entity.opts.backends = available
-	entity.log(msg)
+	entity.log(&msg)
 
 }
 

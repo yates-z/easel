@@ -84,6 +84,7 @@ func (e *jsonEncoder) encode(field LogField, r *record) {
 	} else if value == RESERVE_MESSAGE_PLACEHOLDER {
 		value = *r.msg
 	}
+	value = field.Decorate(value, r.color)
 	key := field.Key()
 	r.output += fmt.Sprintf(`"%s": "%s"`, key, value)
 }
@@ -123,7 +124,7 @@ func (e *logFmtEncoder) encode(field LogField, key string, r *record) {
 	} else if value == RESERVE_MESSAGE_PLACEHOLDER {
 		value = *r.msg
 	}
-
+	value = field.Decorate(value, r.color)
 	r.output += fmt.Sprintf(`%s="%s"`, key, value)
 }
 

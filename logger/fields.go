@@ -277,57 +277,87 @@ func TimeField(t UnixTimeType) *FieldBuilder {
 	return &FieldBuilder{field: f}
 }
 
-// ====== LongCallerField ======
-type longCallerField struct {
+// ====== FuncNameField ======
+type funcNameField struct {
 	Field
+	shorten bool
 }
 
-func (f *longCallerField) ToString() string {
-	_, file, line, ok := runtime.Caller(7)
+func (f *funcNameField) ToString() string {
+	pc, _, _, ok := runtime.Caller(7)
 	if !ok {
-		file = "???"
-		line = 0
+		return "???"
 	}
-	s := fmt.Sprintf("%s %d", file, line)
-	return s
+	funcName := runtime.FuncForPC(pc).Name()
+	if f.shorten {
+		name := funcName
+		for i := len(name) - 1; i > 0; i-- {
+			if funcName[i] == '.' {
+				name = funcName[i+1:]
+				break
+			}
+		}
+		funcName = name
+	}
+
+	return funcName
 }
 
-func LongCallerField() *FieldBuilder {
-	f := &longCallerField{}
+func FuncNameField(shorten bool) *FieldBuilder {
+	f := &funcNameField{
+		shorten: shorten,
+	}
 	return &FieldBuilder{field: f}
 }
 
-// ====== ShortCallerField ======
-type shortCallerField struct {
+// ====== CallerField ======
+type callerField struct {
 	Field
-	showFunc bool
+	shorten      bool
+	showFuncName bool
 }
 
-func (f *shortCallerField) ToString() string {
+func (f *callerField) ToString() string {
 	pc, file, line, ok := runtime.Caller(7)
 	if !ok {
 		file = "???"
 		line = 0
 	}
-	var funcName string
-	if f.showFunc {
-		funcName = runtime.FuncForPC(pc).Name() + " "
-	}
-	short := file
-	for i := len(file) - 1; i > 0; i-- {
-		if file[i] == '/' {
-			short = file[i+1:]
-			break
+	if f.shorten {
+		short := file
+		for i := len(file) - 1; i > 0; i-- {
+			if file[i] == '/' {
+				short = file[i+1:]
+				break
+			}
 		}
+		file = short
 	}
-	file = short
-	s := fmt.Sprintf("%s%s %d", funcName, file, line)
+
+	var funcName string
+	if f.showFuncName {
+		funcName = runtime.FuncForPC(pc).Name()
+		if f.shorten {
+			name := funcName
+			for i := len(name) - 1; i > 0; i-- {
+				if funcName[i] == '.' {
+					name = funcName[i+1:]
+					break
+				}
+			}
+			funcName = name
+		}
+		funcName = " " + funcName
+	}
+
+	s := fmt.Sprintf("%s %d%s", file, line, funcName)
 	return s
 }
 
-func ShortCallerField(showFunc bool) *FieldBuilder {
-	f := &shortCallerField{
-		showFunc: showFunc,
+func CallerField(shorten bool, showFuncName bool) *FieldBuilder {
+	f := &callerField{
+		shorten:      shorten,
+		showFuncName: showFuncName,
 	}
 	return &FieldBuilder{field: f}
 }

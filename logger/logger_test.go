@@ -18,7 +18,8 @@ func TestLog(t *testing.T) {
 		WithFields(AnyLevel,
 			DatetimeField("2006-01-02 15:04:03").Key("datetime").Build(),
 			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Build(),
-			ShortCallerField(false).Key("file").Build(),
+			CallerField(true, false).Key("file").Build(),
+			FuncNameField(true).Key("func").Build(),
 			MessageField().Key("msg").Build(),
 			Group("sys_info",
 				CustomField(func() string {
@@ -50,7 +51,7 @@ func TestLogf(t *testing.T) {
 		WithFields(AnyLevel,
 			DatetimeField("2006-01-02 15:04:03").Key("datetime").Build(),
 			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Build(),
-			ShortCallerField(false).Key("file").Build(),
+			CallerField(true, true).Key("caller").Build(),
 			MessageField().Key("msg").Build(),
 			Group("sys_info",
 				CustomField(func() string {
@@ -89,7 +90,7 @@ func TestLogWithColor(t *testing.T) {
 			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Build(),
 		),
 		WithFields(AnyLevel,
-			ShortCallerField(false).Key("file").Color(Black).Background(Blue).Build(),
+			CallerField(true, true).Key("caller").Color(Black).Background(Blue).Build(),
 			MessageField().Key("msg").Build(),
 			Group("sys_info",
 				CustomField(func() string {

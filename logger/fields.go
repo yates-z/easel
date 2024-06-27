@@ -7,39 +7,51 @@ import (
 	"time"
 )
 
+const (
+	RESERVE_MESSAGE_PLACEHOLDER = "__MESSAGE__"
+	RESERVE_LEVEL_PLACEHOLDER   = "__LEVEL__"
+)
+
 type LogField interface {
 	Key() string
 	ToString() string
-	Text(*string) string
-	Color(text string) string
 	Children() []LogField
+	Decorate(s string, color bool) string
+
+	setKey(key string)
+	setColor(color Color)
+	setBackgroundColor(color Color)
+	setPrefix(prefix string)
+	setSuffix(suffix string)
+	setUpper()
+	setLower()
 }
 
-type FieldConstructor = func(entity *logEntity) LogField
+var _ LogField = (*Field)(nil)
 
 type Field struct {
 	key        string
-	entity     *logEntity
 	color      Color
 	background Color
-
-	children []LogField
+	prefix     string
+	suffix     string
+	upper      bool
+	lower      bool
+	children   []LogField
 }
 
-func (f *Field) Key() string {
-	return f.key
-}
-
-func (f *Field) ToString() string {
-	return ""
-}
-
-func (f *Field) Text(_ *string) string {
-	return ""
-}
-
-func (f *Field) Children() []LogField {
-	return f.children
+func (f *Field) Decorate(s string, color bool) string {
+	if f.upper && !f.lower {
+		s = strings.ToUpper(s)
+	}
+	if !f.upper && f.lower {
+		s = strings.ToLower(s)
+	}
+	if color {
+		s = f.Color(s)
+	}
+	s = fmt.Sprintf("%s%s%s", f.prefix, s, f.suffix)
+	return s
 }
 
 func (f *Field) Color(text string) string {
@@ -62,6 +74,121 @@ func (f *Field) Color(text string) string {
 	return text
 }
 
+func (f *Field) Key() string {
+	return f.key
+}
+
+func (f *Field) ToString() string {
+	return ""
+}
+
+func (f *Field) Children() []LogField {
+	return f.children
+}
+
+func (f *Field) setKey(key string) {
+	f.key = key
+}
+
+func (f *Field) setColor(color Color) {
+	f.color = color
+}
+
+func (f *Field) setBackgroundColor(color Color) {
+	f.background = color.ToBackground()
+}
+func (f *Field) setPrefix(prefix string) {
+	f.prefix = prefix
+}
+
+func (f *Field) setSuffix(suffix string) {
+	f.suffix = suffix
+}
+
+func (f *Field) setUpper() {
+	f.upper = true
+}
+
+func (f *Field) setLower() {
+	f.lower = true
+}
+
+type FieldBuilder struct {
+	field LogField
+}
+
+func (b *FieldBuilder) Key(key string) *FieldBuilder {
+	b.field.setKey(key)
+	return b
+}
+
+func (b *FieldBuilder) Color(color Color) *FieldBuilder {
+	b.field.setColor(color)
+	return b
+}
+
+func (b *FieldBuilder) Background(color Color) *FieldBuilder {
+	b.field.setBackgroundColor(color)
+	return b
+}
+
+func (b *FieldBuilder) Prefix(prefix string) *FieldBuilder {
+	b.field.setPrefix(prefix)
+	return b
+}
+
+func (b *FieldBuilder) Suffix(suffix string) *FieldBuilder {
+	b.field.setSuffix(suffix)
+	return b
+}
+
+func (b *FieldBuilder) Upper() *FieldBuilder {
+	b.field.setUpper()
+	return b
+}
+
+func (b *FieldBuilder) Lower() *FieldBuilder {
+	b.field.setLower()
+	return b
+}
+
+func (b *FieldBuilder) Build() LogField {
+	return b.field
+}
+
+// ====== FastField ======
+type fastField struct {
+	*Field
+	msg interface{}
+}
+
+func (f *fastField) ToString() string {
+	return fmt.Sprintf("%v", f.msg)
+}
+
+func F(key string, value interface{}) *FieldBuilder {
+	f := &fastField{
+		Field: &Field{key: key},
+		msg:   value,
+	}
+	return &FieldBuilder{field: f}
+}
+
+// ====== Group ======
+type group struct {
+	*Field
+}
+
+func Group(key string, fields ...LogField) *FieldBuilder {
+	g := &group{
+		Field: &Field{
+			key:      key,
+			children: fields,
+		},
+	}
+	return &FieldBuilder{field: g}
+}
+
 // ====== LevelField ======
 type levelField struct {
 	Field
@@ -69,59 +196,29 @@ type levelField struct {
 }
 
 func (f *levelField) ToString() string {
-	s := f.entity.level.String()
-	if f.upper {
-		s = strings.ToUpper(s)
+	return RESERVE_LEVEL_PLACEHOLDER
+}
+
+func LevelField(upper bool) *FieldBuilder {
+	f := &levelField{
+		upper: true,
 	}
-	return s
+	return &FieldBuilder{field: f}
 }
 
-type levelFieldBuilder struct {
-	field levelField
+// ====== MessageField ======
+type messageField struct {
+	Field
 }
 
-func (f *levelFieldBuilder) Upper(upper bool) *levelFieldBuilder {
-	f.field.upper = upper
-	return f
+func (f *messageField) ToString() string {
+	return RESERVE_MESSAGE_PLACEHOLDER
 }
 
-func (f *levelFieldBuilder) Color(color Color) *levelFieldBuilder {
-	f.field.color = color
-	return f
+func MessageField() *FieldBuilder {
+	f := &messageField{}
+	return &FieldBuilder{field: f}
 }
-
-func (f *levelFieldBuilder) Background(color Color) *levelFieldBuilder {
-	f.field.background = color.ToBackground()
-	return f
-}
-
-func (f *levelFieldBuilder) Build() FieldConstructor {
-
-	return func(entity *logEntity) LogField {
-		field := f.field
-		field.entity = entity
-		return &field
-	}
-}
-
-func LevelField(key string) *levelFieldBuilder {
-	f := levelField{
-		Field: Field{key: key},
-	}
-	return &levelFieldBuilder{field: f}
-}
-
-//func LevelField(key string, upper bool) LogFieldHandler {
-//	f := levelField{
-//		Field: Field{Key: key},
-//		upper: upper,
-//	}
-//	return func(entity *logEntity) LogField {
-//		field := f
-//		field.entity = entity
-//		return &field
-//	}
-//}
 
 // ====== DatetimeField ======
 type datetimeField struct {
@@ -137,39 +234,11 @@ func (f *datetimeField) ToString() string {
 	return s
 }
 
-type datetimeFieldBuilder struct {
-	field datetimeField
-}
-
-func (f *datetimeFieldBuilder) Layout(layout string) *datetimeFieldBuilder {
-	f.field.layout = layout
-	return f
-}
-
-func (f *datetimeFieldBuilder) Color(color Color) *datetimeFieldBuilder {
-	f.field.color = color
-	return f
-}
-
-func (f *datetimeFieldBuilder) Background(color Color) *datetimeFieldBuilder {
-	f.field.background = color.ToBackground()
-	return f
-}
-
-func (f *datetimeFieldBuilder) Build() FieldConstructor {
-
-	return func(entity *logEntity) LogField {
-		field := f.field
-		field.entity = entity
-		return &field
+func DatetimeField(layout string) *FieldBuilder {
+	f := &datetimeField{
+		layout: layout,
 	}
-}
-
-func DatetimeField(key string) *datetimeFieldBuilder {
-	f := datetimeField{
-		Field: Field{key: key},
-	}
-	return &datetimeFieldBuilder{field: f}
+	return &FieldBuilder{field: f}
 }
 
 // ====== TimeField ======
@@ -203,87 +272,18 @@ type timeField struct {
 	t UnixTimeType
 }
 
-type timeFieldBuilder struct {
-	field timeField
+func TimeField(t UnixTimeType) *FieldBuilder {
+	f := &timeField{t: t}
+	return &FieldBuilder{field: f}
 }
 
-func (f *timeFieldBuilder) Type(t UnixTimeType) *timeFieldBuilder {
-	f.field.t = t
-	return f
-}
-
-func (f *timeFieldBuilder) Color(color Color) *timeFieldBuilder {
-	f.field.color = color
-	return f
-}
-
-func (f *timeFieldBuilder) Background(color Color) *timeFieldBuilder {
-	f.field.background = color.ToBackground()
-	return f
-}
-
-func (f *timeFieldBuilder) Build() FieldConstructor {
-
-	return func(entity *logEntity) LogField {
-		field := f.field
-		field.entity = entity
-		return &field
-	}
-}
-
-func TimeField(key string) *timeFieldBuilder {
-	f := timeField{
-		Field: Field{key: key},
-	}
-	return &timeFieldBuilder{field: f}
-}
-
-// ====== MessageField ======
-type messageField struct {
+// ====== LongCallerField ======
+type longCallerField struct {
 	Field
 }
 
-func (f *messageField) Text(text *string) string {
-	return *text
-}
-
-type messageFieldBuilder struct {
-	field messageField
-}
-
-func (f *messageFieldBuilder) Color(color Color) *messageFieldBuilder {
-	f.field.color = color
-	return f
-}
-
-func (f *messageFieldBuilder) Background(color Color) *messageFieldBuilder {
-	f.field.background = color.ToBackground()
-	return f
-}
-
-func (f *messageFieldBuilder) Build() FieldConstructor {
-
-	return func(entity *logEntity) LogField {
-		field := f.field
-		field.entity = entity
-		return &field
-	}
-}
-
-func MessageField(key string) *messageFieldBuilder {
-	f := messageField{
-		Field: Field{key: key},
-	}
-	return &messageFieldBuilder{field: f}
-}
-
-// ====== LongFileField ======
-type longFileField struct {
-	Field
-}
-
-func (f *longFileField) ToString() string {
-	_, file, line, ok := runtime.Caller(4)
+func (f *longCallerField) ToString() string {
+	_, file, line, ok := runtime.Caller(7)
 	if !ok {
 		file = "???"
 		line = 0
@@ -292,46 +292,26 @@ func (f *longFileField) ToString() string {
 	return s
 }
 
-type longFileFieldBuilder struct {
-	field longFileField
+func LongCallerField() *FieldBuilder {
+	f := &longCallerField{}
+	return &FieldBuilder{field: f}
 }
 
-func (f *longFileFieldBuilder) Color(color Color) *longFileFieldBuilder {
-	f.field.color = color
-	return f
-}
-
-func (f *longFileFieldBuilder) Background(color Color) *longFileFieldBuilder {
-	f.field.background = color.ToBackground()
-	return f
-}
-
-func (f *longFileFieldBuilder) Build() FieldConstructor {
-
-	return func(entity *logEntity) LogField {
-		field := f.field
-		field.entity = entity
-		return &field
-	}
-}
-
-func LongFileField(key string) *longFileFieldBuilder {
-	f := longFileField{
-		Field: Field{key: key},
-	}
-	return &longFileFieldBuilder{field: f}
-}
-
-// ====== ShortFileField ======
-type shortFileField struct {
+// ====== ShortCallerField ======
+type shortCallerField struct {
 	Field
+	showFunc bool
 }
 
-func (f *shortFileField) ToString() string {
-	_, file, line, ok := runtime.Caller(4)
+func (f *shortCallerField) ToString() string {
+	pc, file, line, ok := runtime.Caller(7)
 	if !ok {
 		file = "???"
 		line = 0
+	}
+	var funcName string
+	if f.showFunc {
+		funcName = runtime.FuncForPC(pc).Name() + " "
 	}
 	short := file
 	for i := len(file) - 1; i > 0; i-- {
@@ -341,38 +321,15 @@ func (f *shortFileField) ToString() string {
 		}
 	}
 	file = short
-	s := fmt.Sprintf("%s %d", file, line)
+	s := fmt.Sprintf("%s%s %d", funcName, file, line)
 	return s
 }
 
-type shortFileFieldBuilder struct {
-	field shortFileField
-}
-
-func (f *shortFileFieldBuilder) Color(color Color) *shortFileFieldBuilder {
-	f.field.color = color
-	return f
-}
-
-func (f *shortFileFieldBuilder) Background(color Color) *shortFileFieldBuilder {
-	f.field.background = color.ToBackground()
-	return f
-}
-
-func (f *shortFileFieldBuilder) Build() FieldConstructor {
-
-	return func(entity *logEntity) LogField {
-		field := f.field
-		field.entity = entity
-		return &field
+func ShortCallerField(showFunc bool) *FieldBuilder {
+	f := &shortCallerField{
+		showFunc: showFunc,
 	}
-}
-
-func ShortFileField(key string) *shortFileFieldBuilder {
-	f := shortFileField{
-		Field: Field{key: key},
-	}
-	return &shortFileFieldBuilder{field: f}
+	return &FieldBuilder{field: f}
 }
 
 // ====== CustomField ======
@@ -390,68 +347,9 @@ func (f *customField) ToString() string {
 	return s
 }
 
-type customFieldFieldBuilder struct {
-	field customField
-}
-
-func (f *customFieldFieldBuilder) Handle(handler func() string) *customFieldFieldBuilder {
-	f.field.handler = handler
-	return f
-}
-
-func (f *customFieldFieldBuilder) Color(color Color) *customFieldFieldBuilder {
-	f.field.color = color
-	return f
-}
-
-func (f *customFieldFieldBuilder) Background(color Color) *customFieldFieldBuilder {
-	f.field.background = color.ToBackground()
-	return f
-}
-
-func (f *customFieldFieldBuilder) Build() FieldConstructor {
-
-	return func(entity *logEntity) LogField {
-		field := f.field
-		field.entity = entity
-		return &field
+func CustomField(handler func() string) *FieldBuilder {
+	f := &customField{
+		handler: handler,
 	}
-}
-
-func CustomField(key string) *customFieldFieldBuilder {
-	f := customField{
-		Field: Field{key: key},
-	}
-	return &customFieldFieldBuilder{field: f}
-}
-
-// ====== Group ======
-
-type group struct {
-	Field
-	children []FieldConstructor
-}
-
-type groupFieldBuilder struct {
-	group group
-}
-
-func (g *groupFieldBuilder) Build() FieldConstructor {
-
-	return func(entity *logEntity) LogField {
-		group := g.group
-		group.entity = entity
-		for _, constructor := range group.children {
-			group.Field.children = append(group.Field.children, constructor(entity))
-		}
-		return &group
-	}
-}
-
-func Group(key string, fields ...FieldConstructor) *groupFieldBuilder {
-	g := group{
-		Field:    Field{key: key},
-		children: fields,
-	}
-	return &groupFieldBuilder{group: g}
+	return &FieldBuilder{field: f}
 }

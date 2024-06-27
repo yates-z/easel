@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"github.com/yates-z/easel/logger/backend"
 	"os"
@@ -8,80 +9,120 @@ import (
 	"testing"
 )
 
-func TestLogger(t *testing.T) {
-	logger := NewLogger(
-		WithLevel(InfoLevel),
-		WithSkipLines(1),
-		WithBackends(backend.OSBackend().Build(), backend.DefaultFileBackend().Build()),
-		WithFields(
-			LevelField("level").Upper(true).Build(),
-			DatetimeField("datetime").Build(),
-			ShortFileField("file").Build(),
-			MessageField("msg").Build(),
-		),
-		WithSeparator(" "),
-		WithEncoders(PlainEncoder(), JsonEncoder()),
-	)
-	logger.Log(DebugLevel, "this is a test")
-	logger.Log(WarnLevel, "this is a test", 123, 456)
-	logger.Logf(ErrorLevel, "this is a %s test", "error")
-	logger.Logf(PanicLevel, "fatal..... %d", 666)
-}
-
-func TestColor(t *testing.T) {
-	logger := NewLogger(
-		WithLevel(InfoLevel),
-		WithSkipLines(1),
-		WithBackends(
-			backend.OSBackend().Build(),
-			backend.DefaultFileBackend().Filename("log.log").Build(),
-		),
-		WithFields(
-			LevelField("level").Upper(true).Color(Red).Background(Blue).Build(),
-			DatetimeField("datetime").Color(Green).Build(),
-			ShortFileField("file").Color(Black).Background(Magenta).Build(),
-			MessageField("msg").Background(Yellow).Build(),
+func TestLog(t *testing.T) {
+	l := NewLogger(
+		WithLevel(WarnLevel),
+		WithBackends(AnyLevel, backend.OSBackend().Build()),
+		WithSeparator(InfoLevel|WarnLevel, " "),
+		WithSeparator(ErrorLevel|FatalLevel|PanicLevel, "@@"),
+		WithFields(AnyLevel,
+			DatetimeField("2006-01-02 15:04:03").Key("datetime").Build(),
+			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Build(),
+			ShortCallerField(false).Key("file").Build(),
+			MessageField().Key("msg").Build(),
 			Group("sys_info",
-				CustomField("go_version").Handle(func() string {
-					buildinfo, _ := debug.ReadBuildInfo()
-					return buildinfo.GoVersion
-				}).Color(Red).Build(),
-				Group("sys", CustomField("pid").Handle(func() string {
+				CustomField(func() string {
+					buildInfo, _ := debug.ReadBuildInfo()
+					return buildInfo.GoVersion
+				}).Key("go_version").Build(),
+				Group("sys", CustomField(func() string {
 					return fmt.Sprintf("%d", os.Getpid())
-				}).Build()).Build(),
+				}).Key("pid").Build()).Build(),
 			).Build(),
 		),
-		WithSeparator("   "),
-		WithEncoders(JsonEncoder(), PlainEncoder(), LogFmtEncoder()),
+		WithEncoders(AnyLevel, PlainEncoder, JSONEncoder, LogFmtEncoder),
 	)
-	logger.Log(DebugLevel, "this is a test")
-	logger.Log(WarnLevel, "this is a test", 123, 456, nil)
-	logger.Logf(ErrorLevel, "this is a %s test", "error")
+	l.Debug("hello debug")
+	l.Info("hello info")
+	l.Warn("hello warn")
+	l.Error("hello error")
+
+	//l.Fatal("hello fatal")
+	//l.Panic("hello panic")
 }
 
-func TestGroup(t *testing.T) {
-	logger := NewLogger(
+func TestLogf(t *testing.T) {
+	l := NewLogger(
 		WithLevel(InfoLevel),
-		WithBackends(backend.OSBackend().Build(), backend.DefaultFileBackend().Build()),
-		WithFields(
-			LevelField("level").Upper(true).Build(),
-			DatetimeField("datetime").Build(),
-			ShortFileField("file").Build(),
-			MessageField("msg").Build(),
+		WithBackends(AnyLevel, backend.OSBackend().Build()),
+		WithSeparator(InfoLevel|WarnLevel, " "),
+		WithSeparator(ErrorLevel|FatalLevel|PanicLevel, "@@"),
+		WithFields(AnyLevel,
+			DatetimeField("2006-01-02 15:04:03").Key("datetime").Build(),
+			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Build(),
+			ShortCallerField(false).Key("file").Build(),
+			MessageField().Key("msg").Build(),
 			Group("sys_info",
-				CustomField("go_version").Handle(func() string {
-					buildinfo, _ := debug.ReadBuildInfo()
-					return buildinfo.GoVersion
-				}).Build(),
-				Group("sys", CustomField("pid").Handle(func() string {
+				CustomField(func() string {
+					buildInfo, _ := debug.ReadBuildInfo()
+					return buildInfo.GoVersion
+				}).Key("go_version").Build(),
+				Group("sys", CustomField(func() string {
 					return fmt.Sprintf("%d", os.Getpid())
-				}).Build()).Build(),
+				}).Key("pid").Build()).Build(),
 			).Build(),
 		),
-		WithSeparator(" "),
-		WithEncoders(PlainEncoder(), JsonEncoder(), LogFmtEncoder()),
+		WithEncoders(AnyLevel, PlainEncoder, JSONEncoder, LogFmtEncoder),
 	)
-	logger.Log(DebugLevel, "this is a test")
-	logger.Log(WarnLevel, "this is a test", 123, 456)
-	logger.Logf(ErrorLevel, "this is a %s test", "error")
+
+	l.Debugf("hello %s %d", "debugf", 1000)
+	l.Infof("hello %s %d", "infof", 1001)
+	l.Warnf("hello %s %.2f", "warnf", 1002)
+	l.Errorf("hello %s %d", "errorf", 1003)
+	//l.Fatalf("hello %s %d", "fatalf", 1000)
+	//l.Panicf("hello %s %d", "panicf", 1000)
+}
+
+func TestLogWithColor(t *testing.T) {
+	l := NewLogger(
+		WithLevel(DebugLevel),
+		WithBackends(AnyLevel, backend.OSBackend().Build()),
+		WithSeparator(InfoLevel|WarnLevel, " "),
+		WithSeparator(ErrorLevel|FatalLevel|PanicLevel, " "),
+		WithFields(AnyLevel,
+			DatetimeField("2006-01-02 15:04:03").Key("datetime").Color(Yellow).Build(),
+		),
+		WithFields(ErrorLevel|FatalLevel|PanicLevel,
+			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Color(Red).Build(),
+		),
+		WithFields(AnyLevel^ErrorLevel^FatalLevel^PanicLevel,
+			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Build(),
+		),
+		WithFields(AnyLevel,
+			ShortCallerField(false).Key("file").Color(Black).Background(Blue).Build(),
+			MessageField().Key("msg").Build(),
+			Group("sys_info",
+				CustomField(func() string {
+					buildInfo, _ := debug.ReadBuildInfo()
+					return buildInfo.GoVersion
+				}).Key("go_version").Build(),
+				Group("sys", CustomField(func() string {
+					return fmt.Sprintf("%d", os.Getpid())
+				}).Key("pid").Build()).Build(),
+			).Build(),
+		),
+		WithEncoders(AnyLevel, PlainEncoder, JSONEncoder, LogFmtEncoder),
+	)
+	l.Debug("hello debug")
+	l.Info("hello info")
+	l.Warn("hello warn")
+	l.Error("hello error")
+
+	//l.Fatal("hello fatal")
+	//l.Panic("hello panic")
+}
+
+func TestDefaultLog(t *testing.T) {
+	Debug("hello debug")
+	Info("hello info")
+	Warn("hello warn")
+	Error("hello error")
+
+	Debugf("hello %s %d", "debugf", 1000)
+	Infof("hello %s %d", "infof", 1001)
+	Warnf("hello %s %.2f", "warnf", 1002)
+	Errorf("hello %s %d", "errorf", 1003)
+
+	Context(context.Background()).Debug("hello debug")
+
 }

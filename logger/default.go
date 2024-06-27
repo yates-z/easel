@@ -1,6 +1,9 @@
 package logger
 
-import "context"
+import (
+	"context"
+	"github.com/yates-z/easel/logger/backend"
+)
 
 var DefaultLogger Loggable = nil
 
@@ -53,11 +56,29 @@ func Panicf(format string, fmtArgs ...interface{}) {
 }
 
 func Context(ctx context.Context) Logger {
-	return DefaultLogger.Context(ctx)
+	return DefaultLogger.(Logger).Context(ctx)
 }
 
 func UseDefault() {
-	DefaultLogger = NewLogger()
+	DefaultLogger = NewLogger(
+		WithLevel(DebugLevel),
+		WithBackends(AnyLevel, backend.OSBackend().Build()),
+		WithSeparator(AnyLevel, " "),
+		WithFields(AnyLevel,
+			DatetimeField("2006-01-02 15:04:03").Key("datetime").Build(),
+		),
+		WithFields(ErrorLevel|FatalLevel|PanicLevel,
+			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Color(Red).Build(),
+		),
+		WithFields(AnyLevel^ErrorLevel^FatalLevel^PanicLevel,
+			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Build(),
+		),
+		WithFields(AnyLevel,
+			ShortCallerField(true).Key("file").Build(),
+			MessageField().Key("msg").Build(),
+		),
+		WithEncoders(AnyLevel, PlainEncoder),
+	)
 }
 
 func Use(logger Loggable) {

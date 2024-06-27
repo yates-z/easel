@@ -14,70 +14,78 @@ func init() {
 type Loggable interface {
 	Log(level LogLevel, msg ...interface{})
 	Logf(level LogLevel, format string, fmtArgs ...interface{})
-	Context(ctx context.Context) Logger
+	Logw(level LogLevel, msg string, fields ...LogField)
 }
 
 type Logger interface {
 	Loggable
 	Backends() []backend.Backend
-	Mode() LogMode
 	Level() LogLevel
-
+	Context(ctx context.Context) Logger
 	Debug(msg ...interface{})
 	Debugf(format string, fmtArgs ...interface{})
+	Debugw(msg string, fields ...LogField)
 	Warn(msg ...interface{})
 	Warnf(format string, fmtArgs ...interface{})
+	Warnw(msg string, fields ...LogField)
 	Info(msg ...interface{})
 	Infof(format string, fmtArgs ...interface{})
+	Infow(msg string, fields ...LogField)
 	Error(msg ...interface{})
 	Errorf(format string, fmtArgs ...interface{})
+	Errorw(msg string, fields ...LogField)
 	Fatal(msg ...interface{})
 	Fatalf(format string, fmtArgs ...interface{})
+	Fatalw(msg string, fields ...LogField)
 	Panic(msg ...interface{})
 	Panicf(format string, fmtArgs ...interface{})
-}
-
-type logEntity struct {
-	level     LogLevel
-	fields    []LogField
-	encoders  []Encoder
-	separator string
-	skipLines int
-}
-
-func (e *logEntity) convertToLog(msg ...interface{}) []byte {
-	var logs []byte
-	for _, encoder := range e.encoders {
-		log := encoder.Encode(fmt.Sprint(msg...))
-		logs = append(logs, []byte(log)...)
-	}
-	return logs
-}
-
-func (e *logEntity) convertToColoredLog(msg ...interface{}) []byte {
-	var logs []byte
-	for _, encoder := range e.encoders {
-		log := encoder.EncodeWithColor(fmt.Sprint(msg...))
-		logs = append(logs, []byte(log)...)
-	}
-	return logs
+	Panicw(msg string, fields ...LogField)
 }
 
 type logger struct {
-	opts     Options
 	ctx      context.Context
+	level    LogLevel
 	entities map[LogLevel]*logEntity
 }
 
-func (l *logger) Level() LogLevel {
-	return l.opts.Level
+func (l *logger) Log(level LogLevel, msg ...interface{}) {
+	if !l.level.Enabled(level) {
+		return
+	}
+	entity := l.entities[level]
+	errs, available := entity.log(fmt.Sprint(msg...))
+	l.entities[ErrorLevel].handleError(errs, available)
+
+	if level.Eq(FatalLevel) {
+		os.Exit(1)
+	}
+	if level.Eq(PanicLevel) {
+		panic(fmt.Sprint(msg...))
+	}
 }
 
-func (l *logger) Backends() []backend.Backend {
-	return l.opts.Backends
+func (l *logger) Logf(level LogLevel, format string, fmtArgs ...interface{}) {
+	if !l.level.Enabled(level) {
+		return
+	}
+
+	if len(fmtArgs) != 0 && format != "" {
+		format = fmt.Sprintf(format, fmtArgs...)
+	}
+
+	entity := l.entities[level]
+	errs, available := entity.log(format)
+	l.entities[ErrorLevel].handleError(errs, available)
+
+	if level.Eq(FatalLevel) {
+		os.Exit(1)
+	}
+	if level.Eq(PanicLevel) {
+		panic(format)
+	}
 }
 
-func (l *logger) Mode() LogMode {
+func (l *logger) Logw(level LogLevel, msg string, fields ...LogField) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -87,114 +95,13 @@ func (l *logger) Context(ctx context.Context) Logger {
 	return l
 }
 
-func (l *logger) Log(level LogLevel, msg ...interface{}) {
-	if !l.opts.Level.Enabled(level) {
-		return
-	}
-	entity := l.entities[level]
-
-	var logs, coloredLogs []byte
-	logs = entity.convertToLog(msg...)
-
-	var errs string
-	var available []backend.Backend
-	for _, b := range l.opts.Backends {
-		var err error
-		if b.AllowANSI() {
-			if len(coloredLogs) == 0 {
-				coloredLogs = entity.convertToColoredLog(msg...)
-			}
-			_, err = b.Write(coloredLogs)
-		} else {
-			_, err = b.Write(logs)
-		}
-		if err != nil {
-			errs += fmt.Sprintf("%T writer error: %s.", b, err)
-		} else {
-			available = append(available, b)
-		}
-	}
-	if len(errs) != 0 {
-		// broadcast errors
-		entity = l.entities[ErrorLevel]
-
-		logs = entity.convertToLog(errs)
-
-		for _, b := range available {
-			if b.AllowANSI() {
-				if len(coloredLogs) == 0 {
-					coloredLogs = entity.convertToColoredLog(errs)
-				}
-				_, _ = b.Write(coloredLogs)
-			} else {
-				_, _ = b.Write(logs)
-			}
-		}
-	}
-
-	if level.Eq(FatalLevel) {
-		os.Exit(1)
-	}
-	if level.Eq(PanicLevel) {
-		panic(fmt.Sprint(msg...))
-	}
-
+func (l *logger) Backends() []backend.Backend {
+	//TODO implement me
+	panic("implement me")
 }
 
-func (l *logger) Logf(level LogLevel, format string, fmtArgs ...interface{}) {
-	if !l.opts.Level.Enabled(level) {
-		return
-	}
-
-	if len(fmtArgs) != 0 && format != "" {
-		format = fmt.Sprintf(format, fmtArgs...)
-	}
-
-	entity := l.entities[level]
-	var logs, coloredLogs []byte
-	logs = entity.convertToLog(format)
-
-	var errs string
-	var available []backend.Backend
-	for _, b := range l.opts.Backends {
-		var err error
-		if b.AllowANSI() {
-			if len(coloredLogs) == 0 {
-				coloredLogs = entity.convertToColoredLog(format)
-			}
-			_, err = b.Write(coloredLogs)
-		} else {
-			_, err = b.Write(logs)
-		}
-		if err != nil {
-			errs += fmt.Sprintf("%T writer error: %s.", b, err)
-		} else {
-			available = append(available, b)
-		}
-	}
-	if len(errs) != 0 {
-		// broadcast errors
-		entity = l.entities[ErrorLevel]
-		logs = entity.convertToLog(errs)
-
-		for _, b := range available {
-			if b.AllowANSI() {
-				if len(coloredLogs) == 0 {
-					coloredLogs = entity.convertToColoredLog(errs)
-				}
-				_, _ = b.Write(coloredLogs)
-			} else {
-				_, _ = b.Write(logs)
-			}
-		}
-	}
-
-	if level.Eq(FatalLevel) {
-		os.Exit(1)
-	}
-	if level.Eq(PanicLevel) {
-		panic(format)
-	}
+func (l *logger) Level() LogLevel {
+	return l.level
 }
 
 func (l *logger) Debug(msg ...interface{}) {
@@ -205,12 +112,20 @@ func (l *logger) Debugf(format string, fmtArgs ...interface{}) {
 	l.Logf(DebugLevel, format, fmtArgs...)
 }
 
+func (l *logger) Debugw(msg string, fields ...LogField) {
+	l.Logw(DebugLevel, msg, fields...)
+}
+
 func (l *logger) Info(msg ...interface{}) {
 	l.Log(InfoLevel, msg...)
 }
 
 func (l *logger) Infof(format string, fmtArgs ...interface{}) {
 	l.Logf(InfoLevel, format, fmtArgs...)
+}
+
+func (l *logger) Infow(msg string, fields ...LogField) {
+	l.Logw(InfoLevel, msg, fields...)
 }
 
 func (l *logger) Warn(msg ...interface{}) {
@@ -221,12 +136,20 @@ func (l *logger) Warnf(format string, fmtArgs ...interface{}) {
 	l.Logf(WarnLevel, format, fmtArgs...)
 }
 
+func (l *logger) Warnw(msg string, fields ...LogField) {
+	l.Logw(WarnLevel, msg, fields...)
+}
+
 func (l *logger) Error(msg ...interface{}) {
 	l.Log(ErrorLevel, msg...)
 }
 
 func (l *logger) Errorf(format string, fmtArgs ...interface{}) {
 	l.Logf(ErrorLevel, format, fmtArgs...)
+}
+
+func (l *logger) Errorw(msg string, fields ...LogField) {
+	l.Logw(ErrorLevel, msg, fields...)
 }
 
 func (l *logger) Fatal(msg ...interface{}) {
@@ -237,6 +160,10 @@ func (l *logger) Fatalf(format string, fmtArgs ...interface{}) {
 	l.Logf(FatalLevel, format, fmtArgs...)
 }
 
+func (l *logger) Fatalw(msg string, fields ...LogField) {
+	l.Logw(FatalLevel, msg, fields...)
+}
+
 func (l *logger) Panic(msg ...interface{}) {
 	l.Log(PanicLevel, msg...)
 }
@@ -245,52 +172,28 @@ func (l *logger) Panicf(format string, fmtArgs ...interface{}) {
 	l.Logf(PanicLevel, format, fmtArgs...)
 }
 
+func (l *logger) Panicw(msg string, fields ...LogField) {
+	l.Logw(PanicLevel, msg, fields...)
+}
+
 func NewLogger(opts ...Option) Logger {
 	// handle options.
-	options := Options{
-		Level:     InfoLevel,
-		Separator: " ",
-		SkipLines: 0,
-	}
+	o := newOptions(InfoLevel)
 	for _, opt := range opts {
-		opt(&options)
-	}
-	// fill attributes of options by mode.
-	if len(options.Backends) == 0 {
-		options.Backends = append(options.Backends, backend.OSBackend().Build())
-	}
-	if len(options.Fields) == 0 {
-		options.Fields = append(
-			options.Fields,
-			LevelField("level").Upper(true).Build(),
-			DatetimeField("datetime").Build(),
-			ShortFileField("file").Build(),
-			MessageField("body").Build(),
-		)
-	}
-	if len(options.Encoders) == 0 {
-		options.Encoders = append(options.Encoders, PlainEncoder())
+		opt(o)
 	}
 	// new logger instance.
 	inst := &logger{
-		opts:     options,
 		ctx:      context.Background(),
+		level:    o.level,
 		entities: map[LogLevel]*logEntity{},
 	}
-	for _, level := range options.Level.Enum() {
+	for _, level := range o.level.EnumIncremental() {
 		entity := &logEntity{
-			level:     level,
-			separator: options.Separator,
-			skipLines: options.SkipLines,
+			level: level,
+			opts:  o.entityOptions[level],
 		}
 		inst.entities[level] = entity
-
-		for _, constructor := range options.Fields {
-			entity.fields = append(entity.fields, constructor(entity))
-		}
-		for _, constructor := range options.Encoders {
-			entity.encoders = append(entity.encoders, constructor(entity))
-		}
 	}
 	return inst
 }

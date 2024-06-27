@@ -2,202 +2,138 @@ package logger
 
 import "fmt"
 
-type Encoder interface {
-	Encode(text string) string
-	EncodeWithColor(text string) string
+var (
+	PlainEncoder  = &plainEncoder{}
+	JSONEncoder   = &jsonEncoder{}
+	LogFmtEncoder = &logFmtEncoder{}
+)
+
+type record struct {
+	entity *logEntity
+	msg    *string
+	output string
+	color  bool
 }
 
-type EncoderConstructor = func(entity *logEntity) Encoder
+func newRecord(entity *logEntity, msg *string, color bool) *record {
+	return &record{
+		entity: entity,
+		msg:    msg,
+		output: "",
+		color:  color,
+	}
+}
 
-type BaseEncoder struct {
-	entity *logEntity
+type Encoder interface {
+	Encode(r *record) string
 }
 
 type plainEncoder struct {
-	BaseEncoder
 }
 
-func (e *plainEncoder) encodeField(field LogField, text, output *string, color bool) {
+func (e *plainEncoder) encode(field LogField, r *record) {
 
 	if len(field.Children()) > 0 {
 		for index, child := range field.Children() {
 			if index != 0 {
-				*output += e.entity.separator
+				r.output += r.entity.opts.separator
 			}
-			e.encodeField(child, text, output, color)
+			e.encode(child, r)
 		}
 		return
 	}
-
-	s := field.Text(text)
-	if color {
-		s = field.Color(s)
+	value := field.ToString()
+	if value == RESERVE_LEVEL_PLACEHOLDER {
+		value = r.entity.level.String()
+	} else if value == RESERVE_MESSAGE_PLACEHOLDER {
+		value = *r.msg
 	}
-	*output += s
-
-	s = field.ToString()
-	if color {
-		s = field.Color(s)
-	}
-	*output += s
+	r.output += field.Decorate(value, r.color)
 }
 
-func (e *plainEncoder) encode(text string, color bool) string {
-	output := ""
-	for index, f := range e.entity.fields {
+func (e *plainEncoder) Encode(r *record) string {
+	for index, field := range r.entity.opts.fields {
 		if index != 0 {
-			output += e.entity.separator
+			r.output += r.entity.opts.separator
 		}
 
-		e.encodeField(f, &text, &output, color)
+		e.encode(field, r)
 	}
-	for count := e.entity.skipLines; count >= 0; count-- {
-		output += "\n"
-	}
-	return output
+	return r.output
 }
 
-func (e *plainEncoder) Encode(text string) string {
-	return e.encode(text, false)
-}
+type jsonEncoder struct{}
 
-func (e *plainEncoder) EncodeWithColor(text string) string {
-	return e.encode(text, true)
-}
+func (e *jsonEncoder) encode(field LogField, r *record) {
 
-func PlainEncoder() EncoderConstructor {
-	return func(entity *logEntity) Encoder {
-		encoder := plainEncoder{}
-		encoder.entity = entity
-		return &encoder
-	}
-}
-
-type jsonEncoder struct {
-	BaseEncoder
-}
-
-func (e *jsonEncoder) encodeField(field LogField, text, output *string, color bool) {
 	if len(field.Children()) > 0 {
 		key := field.Key()
-		if color {
-			key = field.Color(key)
-		}
-		*output += key + ": {"
+		r.output += key + ": {"
 		for index, child := range field.Children() {
 			if index != 0 {
-				*output += ", "
+				r.output += ", "
 			}
-			e.encodeField(child, text, output, color)
+			e.encode(child, r)
 		}
-		*output += "}"
+		r.output += "}"
 		return
 	}
-	value := field.Text(text)
-	s := field.ToString()
-	value += s
-
+	value := field.ToString()
+	if value == RESERVE_LEVEL_PLACEHOLDER {
+		value = r.entity.level.String()
+	} else if value == RESERVE_MESSAGE_PLACEHOLDER {
+		value = *r.msg
+	}
 	key := field.Key()
-	if color {
-		value = field.Color(value)
-		key = field.Color(key)
-	}
-	*output += fmt.Sprintf(`"%s": "%s"`, key, value)
-
+	r.output += fmt.Sprintf(`"%s": "%s"`, key, value)
 }
 
-func (e *jsonEncoder) encode(text string, color bool) string {
-	output := "{"
-	for index, f := range e.entity.fields {
+func (e *jsonEncoder) Encode(r *record) string {
+	r.output = "{"
+	for index, field := range r.entity.opts.fields {
 		if index != 0 {
-			output += ", "
+			r.output += ", "
 		}
-		e.encodeField(f, &text, &output, color)
+		e.encode(field, r)
 	}
-	output += "}"
+	r.output += "}"
 
-	for count := e.entity.skipLines; count >= 0; count-- {
-		output += "\n"
-	}
-	return output
+	return r.output
 }
 
-func (e *jsonEncoder) Encode(text string) string {
-	return e.encode(text, false)
-}
+type logFmtEncoder struct{}
 
-func (e *jsonEncoder) EncodeWithColor(text string) string {
-	return e.encode(text, true)
-}
-
-func JsonEncoder() EncoderConstructor {
-	return func(entity *logEntity) Encoder {
-		encoder := jsonEncoder{}
-		encoder.entity = entity
-		return &encoder
-	}
-}
-
-type logFmtEncoder struct {
-	BaseEncoder
-}
-
-func (e *logFmtEncoder) encodeField(field LogField, key string, text, output *string, color bool) {
+func (e *logFmtEncoder) encode(field LogField, key string, r *record) {
 
 	if len(field.Children()) > 0 {
 		for index, child := range field.Children() {
 			if index != 0 {
-				*output += " "
+				r.output += " "
 			}
 			subKey := child.Key()
 			subKey = key + "." + subKey
-			e.encodeField(child, subKey, text, output, color)
+			e.encode(child, subKey, r)
 		}
 		return
 	}
 
-	value := field.Text(text)
-	s := field.ToString()
-	value += s
-	if color {
-		value = field.Color(value)
-		key = field.Color(key)
+	value := field.ToString()
+	if value == RESERVE_LEVEL_PLACEHOLDER {
+		value = r.entity.level.String()
+	} else if value == RESERVE_MESSAGE_PLACEHOLDER {
+		value = *r.msg
 	}
 
-	*output += fmt.Sprintf(`%s=%s`, key, value)
+	r.output += fmt.Sprintf(`%s="%s"`, key, value)
 }
 
-func (e *logFmtEncoder) encode(text string, color bool) string {
-	output := ""
-	for index, f := range e.entity.fields {
+func (e *logFmtEncoder) Encode(r *record) string {
+	for index, field := range r.entity.opts.fields {
 		if index != 0 {
-			output += " "
+			r.output += " "
 		}
-		key := f.Key()
-		if color {
-			key = f.Color(key)
-		}
-		e.encodeField(f, key, &text, &output, color)
+		key := field.Key()
+		e.encode(field, key, r)
 	}
-
-	for count := e.entity.skipLines; count >= 0; count-- {
-		output += "\n"
-	}
-	return output
-}
-
-func (e *logFmtEncoder) Encode(text string) string {
-	return e.encode(text, false)
-}
-
-func (e *logFmtEncoder) EncodeWithColor(text string) string {
-	return e.encode(text, true)
-}
-
-func LogFmtEncoder() EncoderConstructor {
-	return func(entity *logEntity) Encoder {
-		encoder := logFmtEncoder{}
-		encoder.entity = entity
-		return &encoder
-	}
+	return r.output
 }

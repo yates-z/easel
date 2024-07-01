@@ -54,7 +54,7 @@ func (f *Field) Kind() FieldType {
 func (f *Field) decorate(buf *buffer.Buffer, s string, withColor bool) {
 
 	_, _ = buf.WriteString(f.prefix)
-	if withColor {
+	if withColor && !(f.color.IsDefault() && f.background.IsDefault()) {
 		_ = buf.WriteByte(0x1B)
 		if f.color.IsDefault() && !f.background.IsDefault() {
 			_, _ = buf.WriteString("[0;0;" + f.background.String() + "m")
@@ -83,7 +83,7 @@ func (f *Field) decorate(buf *buffer.Buffer, s string, withColor bool) {
 			}
 		}
 	}
-	if withColor {
+	if withColor && !(f.color.IsDefault() && f.background.IsDefault()) {
 		_ = buf.WriteByte(0x1B)
 		_, _ = buf.WriteString("[0m")
 	}

@@ -51,11 +51,6 @@ func (b *Buffer) WriteInt(i int64) {
 	*b = strconv.AppendInt(*b, i, 10)
 }
 
-//// WriteInt appends an integer to the underlying buffer (assuming base 10).
-//func (b *Buffer) WriteInt(i int64) {
-//	*b = strconv.AppendInt(*b, i, 10)
-//}
-
 func (b *Buffer) String() string {
 	return string(*b)
 }

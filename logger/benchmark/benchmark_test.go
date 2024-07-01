@@ -3,7 +3,6 @@ package benchmark
 import (
 	"github.com/yates-z/easel/logger"
 	"github.com/yates-z/easel/logger/backend"
-	"go.uber.org/zap"
 	"log/slog"
 	"os"
 	"strconv"
@@ -11,9 +10,9 @@ import (
 )
 
 // BenchmarkDefaultLog-10
-// 27848             41477 ns/op               5 B/op          0 allocs/op
-// 28186             41704 ns/op               5 B/op          0 allocs/op
-// 28327             41598 ns/op               5 B/op          0 allocs/op
+// 77700             15293 ns/op               5 B/op          0 allocs/op
+// 74779             15248 ns/op               5 B/op          0 allocs/op
+// 75206             15215 ns/op               5 B/op          0 allocs/op
 func BenchmarkDefault(b *testing.B) {
 	log := logger.NewLogger(
 		logger.WithLevel(logger.InfoLevel),
@@ -32,41 +31,32 @@ func BenchmarkDefault(b *testing.B) {
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		//log.Info("Hello World", n)
-		log.Infos("hello infos",
-			logger.F("", strconv.Itoa(n)),
-			logger.F("", strconv.Itoa(n)),
+		log.Infos("hello world",
+			logger.Group("TEST",
+				logger.F("test", "6"),
+				logger.F("test", "7"),
+				logger.F("test", "7"),
+			),
+			logger.F("test", strconv.Itoa(n)),
 		)
 	}
 }
 
 // BenchmarkSlog-10    	  319574	      4160 ns/op
-// 84526             13487 ns/op              48 B/op          1 allocs/op
-// 86983             13399 ns/op              48 B/op          1 allocs/op
-// 84753             13311 ns/op              48 B/op          1 allocs/op
+// 74466             15896 ns/op             533 B/op          8 allocs/op
+// 71007             15828 ns/op             533 B/op          8 allocs/op
+// 74871             15882 ns/op             533 B/op          8 allocs/op
 func BenchmarkSlog(b *testing.B) {
 	s := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		s.Info("hello world", slog.Int("", n), slog.Int("a", n), slog.Int("b", n))
-
+		s.Info("hello world",
+			slog.Group("TEST",
+				slog.String("test", "6"),
+				slog.String("test", "7"),
+				slog.String("test", "7"),
+			),
+			slog.String("test", strconv.Itoa(n)),
+		)
 	}
-}
-
-// 70202             16450 ns/op             281 B/op          3 allocs/op
-// 70435             16486 ns/op             280 B/op          3 allocs/op
-// 70279             16521 ns/op             280 B/op          3 allocs/op
-func BenchmarkZap(b *testing.B) {
-	log, _ := zap.NewProduction()
-	//defer log.Sync()
-
-	sugar := log.Sugar()
-	b.ResetTimer()
-	n := 0
-	for ; n < b.N; n++ {
-		sugar.Info("hello world", n)
-		//fmt.Println(n)
-		//sugar.Infof("hello %d", n)
-	}
-	//fmt.Println(n)
-
 }

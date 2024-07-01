@@ -4,49 +4,55 @@ import (
 	"errors"
 	"fmt"
 	"github.com/yates-z/easel/logger/backend"
+	"github.com/yates-z/easel/logger/buffer"
 )
 
 type logEntity struct {
-	level LogLevel
-	opts  *entityOptions
+	level    LogLevel
+	opts     *entityOptions
+	backends []backend.Backend
 }
 
-func (e *logEntity) preLog(msg *string, withColor bool) []byte {
-	var logs []byte
+func (e *logEntity) preLog(record Record) {
+
 	for _, encoder := range e.opts.encoders {
-		log := encoder.Encode(newRecord(e, msg, withColor))
+		buf := encoder.Encode(record)
 		for count := e.opts.skipLines; count >= 0; count-- {
-			log += "\n"
-		}
-		logs = append(logs, []byte(log)...)
-	}
-	return logs
-}
-
-func (e *logEntity) log(msg *string) (errs []error, available map[backend.Backend]struct{}) {
-	var coloredLogs []byte
-	logs := e.preLog(msg, false)
-	available = make(map[backend.Backend]struct{})
-	for b := range e.opts.backends {
-		var err error
-		if b.AllowANSI() {
-			if len(coloredLogs) == 0 {
-				coloredLogs = e.preLog(msg, true)
-			}
-			_, err = b.Write(coloredLogs)
-		} else {
-			_, err = b.Write(logs)
-		}
-		if err != nil {
-			errs = append(errs, errors.New(fmt.Sprintf("%T writer error: %s.", b, err)))
-		} else {
-			available[b] = struct{}{}
+			_ = buf.WriteByte('\n')
 		}
 	}
 	return
 }
 
-func (e *logEntity) handleError(errs []error, available map[backend.Backend]struct{}) {
+func (e *logEntity) log(msg string) (errs []error) {
+	buf := buffer.New()
+	coloredBuf := buffer.New()
+	defer buf.Free()
+	defer coloredBuf.Free()
+
+	for _, b := range e.backends {
+		var err error
+		if b.AllowANSI() {
+			if coloredBuf.Len() == 0 {
+				record := newRecordWithColor(e, msg, coloredBuf)
+				e.preLog(record)
+			}
+			_, err = b.Write(*coloredBuf)
+		} else {
+			if buf.Len() == 0 {
+				record := newRecord(e, msg, buf)
+				e.preLog(record)
+			}
+			_, err = b.Write(*buf)
+		}
+		if err != nil {
+			errs = append(errs, errors.New(fmt.Sprintf("%T writer error: %s.", b, err)))
+		}
+	}
+	return
+}
+
+func (e *logEntity) handleError(errs []error) {
 	if len(errs) == 0 || !e.level.Eq(ErrorLevel) {
 		return
 	}
@@ -55,22 +61,32 @@ func (e *logEntity) handleError(errs []error, available map[backend.Backend]stru
 	for _, err := range errs {
 		msg += err.Error()
 	}
-	entity := e.copy()
-	entity.opts.backends = available
-	entity.log(&msg)
+	//entity := e.copy()
+	//e.log(&msg)
 
 }
 
-func (e *logEntity) copy() *logEntity {
-	entity := &logEntity{
-		level: e.level,
-		opts: &entityOptions{
-			separator: e.opts.separator,
-			skipLines: e.opts.skipLines,
-			fields:    e.opts.fields,
-			encoders:  e.opts.encoders,
-			backends:  e.opts.backends,
-		},
+func (e *logEntity) copy(target *logEntity) {
+	e.level = target.level
+	e.opts.separator = target.opts.separator
+	e.opts.skipLines = target.opts.skipLines
+	e.opts.fields = append(e.opts.fields[:0], target.opts.fields...)
+	e.opts.encoders = append(e.opts.encoders[:0], target.opts.encoders...)
+
+	for name, b := range target.opts.backends {
+		e.opts.backends[name] = b
+		e.backends = append(e.backends, b)
 	}
-	return entity
+}
+
+func (e *logEntity) clear() {
+	e.level = 0
+	e.opts.separator = ""
+	e.opts.skipLines = 0
+	e.opts.fields = e.opts.fields[:0]
+	e.opts.encoders = e.opts.encoders[:0]
+	for key := range e.opts.backends {
+		delete(e.opts.backends, key)
+	}
+	e.backends = e.backends[:0]
 }

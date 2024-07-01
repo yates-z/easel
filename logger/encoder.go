@@ -1,6 +1,8 @@
 package logger
 
-import "fmt"
+import (
+	"github.com/yates-z/easel/logger/buffer"
+)
 
 var (
 	PlainEncoder  = &plainEncoder{}
@@ -8,133 +10,158 @@ var (
 	LogFmtEncoder = &logFmtEncoder{}
 )
 
-type record struct {
-	entity *logEntity
-	msg    *string
-	output string
-	color  bool
+type Record struct {
+	entity    *logEntity
+	msg       string
+	withColor bool
+	buf       *buffer.Buffer
 }
 
-func newRecord(entity *logEntity, msg *string, color bool) *record {
-	return &record{
-		entity: entity,
-		msg:    msg,
-		output: "",
-		color:  color,
+func newRecord(entity *logEntity, msg string, b *buffer.Buffer) Record {
+	return Record{
+		entity:    entity,
+		msg:       msg,
+		withColor: false,
+		buf:       b,
+	}
+}
+
+func (r *Record) free() {
+	r.msg = ""
+	r.buf.Free()
+}
+
+func newRecordWithColor(entity *logEntity, msg string, b *buffer.Buffer) Record {
+	return Record{
+		entity:    entity,
+		msg:       msg,
+		withColor: true,
+		buf:       b,
 	}
 }
 
 type Encoder interface {
-	Encode(r *record) string
+	Encode(r Record) *buffer.Buffer
 }
 
 type plainEncoder struct {
 }
 
-func (e *plainEncoder) encode(field LogField, r *record) {
+func (e *plainEncoder) encode(field LogField, r Record) {
 
 	if len(field.Children()) > 0 {
 		for index, child := range field.Children() {
 			if index != 0 {
-				r.output += r.entity.opts.separator
+				_, _ = r.buf.WriteString(r.entity.opts.separator)
 			}
 			e.encode(child, r)
 		}
 		return
 	}
-	value := field.ToString()
-	if value == RESERVE_LEVEL_PLACEHOLDER {
-		value = r.entity.level.String()
-	} else if value == RESERVE_MESSAGE_PLACEHOLDER {
-		value = *r.msg
+
+	if field.Kind() == LevelFieldType {
+		field.decorate(r.buf, r.entity.level.String(), r.withColor)
+	} else if field.Kind() == MessageFieldType {
+		field.decorate(r.buf, r.msg, r.withColor)
+	} else {
+		field.decorate(r.buf, "", r.withColor)
 	}
-	r.output += field.Decorate(value, r.color)
 }
 
-func (e *plainEncoder) Encode(r *record) string {
+func (e *plainEncoder) Encode(r Record) *buffer.Buffer {
 	for index, field := range r.entity.opts.fields {
 		if index != 0 {
-			r.output += r.entity.opts.separator
+			_, _ = r.buf.WriteString(r.entity.opts.separator)
 		}
 
 		e.encode(field, r)
 	}
-	return r.output
+	return r.buf
 }
 
 type jsonEncoder struct{}
 
-func (e *jsonEncoder) encode(field LogField, r *record) {
+func (e *jsonEncoder) encode(field LogField, r Record) {
 
 	if len(field.Children()) > 0 {
 		key := field.Key()
-		r.output += key + ": {"
+		_, _ = r.buf.WriteString(`"` + key + `": {`)
 		for index, child := range field.Children() {
 			if index != 0 {
-				r.output += ", "
+				_, _ = r.buf.WriteString(", ")
 			}
 			e.encode(child, r)
 		}
-		r.output += "}"
+		_ = r.buf.WriteByte('}')
 		return
 	}
-	value := field.ToString()
-	if value == RESERVE_LEVEL_PLACEHOLDER {
-		value = r.entity.level.String()
-	} else if value == RESERVE_MESSAGE_PLACEHOLDER {
-		value = *r.msg
+
+	_, _ = r.buf.WriteString(`"` + field.Key() + `":"`)
+
+	if field.Kind() == LevelFieldType {
+		field.decorate(r.buf, r.entity.level.String(), r.withColor)
+	} else if field.Kind() == MessageFieldType {
+		field.decorate(r.buf, r.msg, r.withColor)
+	} else {
+		field.decorate(r.buf, "", r.withColor)
 	}
-	value = field.Decorate(value, r.color)
-	key := field.Key()
-	r.output += fmt.Sprintf(`"%s": "%s"`, key, value)
+	_ = r.buf.WriteByte('"')
+	//value = field.Decorate(value, r.color)
+
 }
 
-func (e *jsonEncoder) Encode(r *record) string {
-	r.output = "{"
+func (e *jsonEncoder) Encode(r Record) *buffer.Buffer {
+	_ = r.buf.WriteByte('{')
 	for index, field := range r.entity.opts.fields {
 		if index != 0 {
-			r.output += ", "
+			_, _ = r.buf.WriteString(", ")
 		}
 		e.encode(field, r)
 	}
-	r.output += "}"
+	_ = r.buf.WriteByte('}')
 
-	return r.output
+	return r.buf
 }
 
 type logFmtEncoder struct{}
 
-func (e *logFmtEncoder) encode(field LogField, key string, r *record) {
+func (e *logFmtEncoder) encode(field LogField, key []byte, r Record) {
 
-	if len(field.Children()) > 0 {
+	if field.Kind() == GroupFieldType {
 		for index, child := range field.Children() {
 			if index != 0 {
-				r.output += " "
+				_ = r.buf.WriteByte(' ')
 			}
-			subKey := child.Key()
-			subKey = key + "." + subKey
+			subKey := key
+			subKey = append(subKey, '.')
+			subKey = append(subKey, child.Key()...)
 			e.encode(child, subKey, r)
 		}
 		return
 	}
 
-	value := field.ToString()
-	if value == RESERVE_LEVEL_PLACEHOLDER {
-		value = r.entity.level.String()
-	} else if value == RESERVE_MESSAGE_PLACEHOLDER {
-		value = *r.msg
+	_, _ = r.buf.Write(key)
+	_ = r.buf.WriteByte('=')
+
+	if field.Kind() == LevelFieldType {
+		field.decorate(r.buf, r.entity.level.String(), r.withColor)
+	} else if field.Kind() == MessageFieldType {
+		_ = r.buf.WriteByte('"')
+		field.decorate(r.buf, r.msg, r.withColor)
+		_ = r.buf.WriteByte('"')
+	} else {
+		field.decorate(r.buf, "", r.withColor)
 	}
-	value = field.Decorate(value, r.color)
-	r.output += fmt.Sprintf(`%s="%s"`, key, value)
+
 }
 
-func (e *logFmtEncoder) Encode(r *record) string {
+func (e *logFmtEncoder) Encode(r Record) *buffer.Buffer {
 	for index, field := range r.entity.opts.fields {
 		if index != 0 {
-			r.output += " "
+			_ = r.buf.WriteByte(' ')
 		}
-		key := field.Key()
+		key := []byte(field.Key())
 		e.encode(field, key, r)
 	}
-	return r.output
+	return r.buf
 }

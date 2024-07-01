@@ -1,22 +1,28 @@
 package logger
 
 import (
-	"fmt"
+	"github.com/yates-z/easel/internal/pool"
+	"github.com/yates-z/easel/logger/buffer"
 	"runtime"
-	"strings"
 	"time"
 )
 
+type FieldType uint8
+
 const (
-	RESERVE_MESSAGE_PLACEHOLDER = "__MESSAGE__"
-	RESERVE_LEVEL_PLACEHOLDER   = "__LEVEL__"
+	CommonFieldType FieldType = iota
+	LevelFieldType
+	MessageFieldType
+	GroupFieldType
 )
 
 type LogField interface {
+	Kind() FieldType
 	Key() string
-	ToString() string
+	Log(buf *buffer.Buffer)
 	Children() []LogField
-	Decorate(s string, color bool) string
+	Free()
+	decorate(buf *buffer.Buffer, s string, withColor bool)
 
 	setKey(key string)
 	setColor(color Color)
@@ -38,52 +44,65 @@ type Field struct {
 	upper      bool
 	lower      bool
 	children   []LogField
+	_child     LogField
 }
 
-func (f *Field) Decorate(s string, color bool) string {
-	if f.upper && !f.lower {
-		s = strings.ToUpper(s)
-	}
-	if !f.upper && f.lower {
-		s = strings.ToLower(s)
-	}
-	if color {
-		s = f.Color(s)
-	}
-	s = fmt.Sprintf("%s%s%s", f.prefix, s, f.suffix)
-	return s
+func (f *Field) Kind() FieldType {
+	return CommonFieldType
 }
 
-func (f *Field) Color(text string) string {
+func (f *Field) decorate(buf *buffer.Buffer, s string, withColor bool) {
 
-	if !f.color.IsDefault() && f.background.IsDefault() {
-		// only foreground color
-		text = f.color.Paint(text)
+	_, _ = buf.WriteString(f.prefix)
+	if withColor {
+		_ = buf.WriteByte(0x1B)
+		if f.color.IsDefault() && !f.background.IsDefault() {
+			_, _ = buf.WriteString("[0;0;" + f.background.String() + "m")
+		} else {
+			_, _ = buf.WriteString("[0;" + f.background.String() + ";" + f.color.String() + "m")
+		}
+	}
 
-	} else if f.color.IsDefault() && !f.background.IsDefault() {
-		// only background color
-		text = f.background.Paint(text)
-
-	} else if !f.color.IsDefault() && !f.background.IsDefault() {
-		// both foreground and background
-		text = f.color.PaintWith(f.background, text)
-
+	if len(s) == 0 {
+		f._child.Log(buf)
 	} else {
-		// neither
+		_, _ = buf.WriteString(s)
+
+		if f.upper && !f.lower {
+			for i := 1; i <= len(s); i++ {
+				if (*buf)[buf.Len()-i] >= 'a' && (*buf)[buf.Len()-i] <= 'z' {
+					(*buf)[buf.Len()-i] -= 'a' - 'A'
+				}
+			}
+		}
+		if !f.upper && f.lower {
+			for i := 1; i <= len(s); i++ {
+				if (*buf)[buf.Len()-i] >= 'A' && (*buf)[buf.Len()-i] <= 'Z' {
+					(*buf)[buf.Len()-i] += 'a' - 'A'
+				}
+			}
+		}
 	}
-	return text
+	if withColor {
+		_ = buf.WriteByte(0x1B)
+		_, _ = buf.WriteString("[0m")
+	}
+	_, _ = buf.WriteString(f.suffix)
+
 }
 
 func (f *Field) Key() string {
 	return f.key
 }
 
-func (f *Field) ToString() string {
-	return ""
-}
+func (f *Field) Log(_ *buffer.Buffer) {}
 
 func (f *Field) Children() []LogField {
 	return f.children
+}
+
+func (f *Field) Free() {
+
 }
 
 func (f *Field) setKey(key string) {
@@ -117,61 +136,85 @@ type FieldBuilder struct {
 	field LogField
 }
 
-func (b *FieldBuilder) Key(key string) *FieldBuilder {
+func (b FieldBuilder) Key(key string) FieldBuilder {
 	b.field.setKey(key)
 	return b
 }
 
-func (b *FieldBuilder) Color(color Color) *FieldBuilder {
+func (b FieldBuilder) Color(color Color) FieldBuilder {
 	b.field.setColor(color)
 	return b
 }
 
-func (b *FieldBuilder) Background(color Color) *FieldBuilder {
+func (b FieldBuilder) Background(color Color) FieldBuilder {
 	b.field.setBackgroundColor(color)
 	return b
 }
 
-func (b *FieldBuilder) Prefix(prefix string) *FieldBuilder {
+func (b FieldBuilder) Prefix(prefix string) FieldBuilder {
 	b.field.setPrefix(prefix)
 	return b
 }
 
-func (b *FieldBuilder) Suffix(suffix string) *FieldBuilder {
+func (b FieldBuilder) Suffix(suffix string) FieldBuilder {
 	b.field.setSuffix(suffix)
 	return b
 }
 
-func (b *FieldBuilder) Upper() *FieldBuilder {
+func (b FieldBuilder) Upper() FieldBuilder {
 	b.field.setUpper()
 	return b
 }
 
-func (b *FieldBuilder) Lower() *FieldBuilder {
+func (b FieldBuilder) Lower() FieldBuilder {
 	b.field.setLower()
 	return b
 }
 
-func (b *FieldBuilder) Build() LogField {
+func (b FieldBuilder) Build() LogField {
 	return b.field
 }
 
 // ====== FastField ======
 type fastField struct {
 	*Field
-	msg interface{}
+	msg []byte
 }
 
-func (f *fastField) ToString() string {
-	return fmt.Sprintf("%v", f.msg)
-}
-
-func F(key string, value interface{}) *FieldBuilder {
+var fastFieldPool = pool.New(func() *fastField {
 	f := &fastField{
-		Field: &Field{key: key},
-		msg:   value,
+		Field: &Field{},
+		msg:   []byte{},
 	}
-	return &FieldBuilder{field: f}
+	f.Field._child = f
+	return f
+})
+
+func (f *fastField) Free() {
+	f.msg = f.msg[:0]
+	f.color = DefaultColor
+	f.background = DefaultColor
+	f.prefix = ""
+	f.suffix = ""
+	f.upper = false
+	f.lower = false
+	fastFieldPool.Put(f)
+}
+
+func (f *fastField) Color(color Color) *fastField {
+	f.color = color
+	return f
+}
+
+func (f *fastField) Log(buf *buffer.Buffer) {
+	_, _ = buf.Write(f.msg)
+}
+
+func F(key string, value string) FieldBuilder {
+	f := fastFieldPool.Get()
+	f.Field.setKey(key)
+	f.msg = append(f.msg, value...)
+	return FieldBuilder{field: f}
 }
 
 // ====== Group ======
@@ -179,31 +222,48 @@ type group struct {
 	*Field
 }
 
-func Group(key string, fields ...LogField) *FieldBuilder {
+var groupPool = pool.New(func() *group {
 	g := &group{
-		Field: &Field{
-			key:      key,
-			children: fields,
-		},
+		Field: &Field{},
 	}
-	return &FieldBuilder{field: g}
+	g.Field._child = g
+	return g
+})
+
+func (f *group) Free() {
+	for _, child := range f.Field.children {
+		child.Free()
+	}
+	f.children = f.children[:0]
+	groupPool.Put(f)
+}
+
+func (f *group) Kind() FieldType {
+	return GroupFieldType
+}
+
+func Group(key string, fields ...FieldBuilder) FieldBuilder {
+	g := groupPool.Get()
+	g.Field.setKey(key)
+	for _, f := range fields {
+		g.Field.children = append(g.Field.children, f.Build())
+	}
+	return FieldBuilder{field: g}
 }
 
 // ====== LevelField ======
 type levelField struct {
 	Field
-	upper bool
 }
 
-func (f *levelField) ToString() string {
-	return RESERVE_LEVEL_PLACEHOLDER
+func (f *levelField) Kind() FieldType {
+	return LevelFieldType
 }
 
-func LevelField(upper bool) *FieldBuilder {
-	f := &levelField{
-		upper: true,
-	}
-	return &FieldBuilder{field: f}
+func LevelField() FieldBuilder {
+	f := &levelField{Field{key: "level"}}
+	f.Field._child = f
+	return FieldBuilder{field: f}
 }
 
 // ====== MessageField ======
@@ -211,13 +271,14 @@ type messageField struct {
 	Field
 }
 
-func (f *messageField) ToString() string {
-	return RESERVE_MESSAGE_PLACEHOLDER
+func (f *messageField) Kind() FieldType {
+	return MessageFieldType
 }
 
-func MessageField() *FieldBuilder {
-	f := &messageField{}
-	return &FieldBuilder{field: f}
+func MessageField() FieldBuilder {
+	f := &messageField{Field{key: "msg"}}
+	f.Field._child = f
+	return FieldBuilder{field: f}
 }
 
 // ====== DatetimeField ======
@@ -226,19 +287,21 @@ type datetimeField struct {
 	layout string
 }
 
-func (f *datetimeField) ToString() string {
+func (f *datetimeField) Log(buf *buffer.Buffer) {
+	now := time.Now()
 	if f.layout == "" {
-		f.layout = "2006-01-02 15:04:05.000"
+		f.layout = "2006/01/02 15:04:05.000"
 	}
-	s := time.Now().Format(f.layout)
-	return s
+	*buf = now.AppendFormat(*buf, f.layout)
 }
 
-func DatetimeField(layout string) *FieldBuilder {
+func DatetimeField(layout string) FieldBuilder {
 	f := &datetimeField{
+		Field:  Field{key: "datetime"},
 		layout: layout,
 	}
-	return &FieldBuilder{field: f}
+	f.Field._child = f
+	return FieldBuilder{field: f}
 }
 
 // ====== TimeField ======
@@ -252,19 +315,17 @@ const (
 	UnixNano
 )
 
-func (f *timeField) ToString() string {
-	s := fmt.Sprintf("%d", time.Now().UnixMilli())
+func (f *timeField) Log(buf *buffer.Buffer) {
 	switch f.t {
 	case Unix:
-		s = fmt.Sprintf("%d", time.Now().Unix())
+		buf.WriteInt(time.Now().Unix())
 	case UnixMilli:
-		s = fmt.Sprintf("%d", time.Now().UnixMilli())
+		buf.WriteInt(time.Now().UnixMilli())
 	case UnixMicro:
-		s = fmt.Sprintf("%d", time.Now().UnixMicro())
+		buf.WriteInt(time.Now().UnixMicro())
 	case UnixNano:
-		s = fmt.Sprintf("%d", time.Now().UnixNano())
+		buf.WriteInt(time.Now().UnixNano())
 	}
-	return s
 }
 
 type timeField struct {
@@ -272,9 +333,13 @@ type timeField struct {
 	t UnixTimeType
 }
 
-func TimeField(t UnixTimeType) *FieldBuilder {
-	f := &timeField{t: t}
-	return &FieldBuilder{field: f}
+func TimeField(t UnixTimeType) FieldBuilder {
+	f := &timeField{
+		Field: Field{key: "time"},
+		t:     t,
+	}
+	f.Field._child = f
+	return FieldBuilder{field: f}
 }
 
 // ====== FuncNameField ======
@@ -283,12 +348,14 @@ type funcNameField struct {
 	shorten bool
 }
 
-func (f *funcNameField) ToString() string {
-	pc, _, _, ok := runtime.Caller(7)
-	if !ok {
-		return "???"
+func (f *funcNameField) Log(buf *buffer.Buffer) {
+	var pcs [1]uintptr
+	runtime.Callers(8, pcs[:])
+	if pcs[0] == 0 {
+		_, _ = buf.WriteString("???")
 	}
-	funcName := runtime.FuncForPC(pc).Name()
+	funcName := runtime.FuncForPC(pcs[0]).Name()
+
 	if f.shorten {
 		name := funcName
 		for i := len(name) - 1; i > 0; i-- {
@@ -299,15 +366,16 @@ func (f *funcNameField) ToString() string {
 		}
 		funcName = name
 	}
-
-	return funcName
+	_, _ = buf.WriteString(funcName)
 }
 
-func FuncNameField(shorten bool) *FieldBuilder {
+func FuncNameField(shorten bool) FieldBuilder {
 	f := &funcNameField{
+		Field:   Field{key: "func"},
 		shorten: shorten,
 	}
-	return &FieldBuilder{field: f}
+	f.Field._child = f
+	return FieldBuilder{field: f}
 }
 
 // ====== CallerField ======
@@ -317,69 +385,73 @@ type callerField struct {
 	showFuncName bool
 }
 
-func (f *callerField) ToString() string {
-	pc, file, line, ok := runtime.Caller(7)
-	if !ok {
-		file = "???"
-		line = 0
+func (f *callerField) Log(buf *buffer.Buffer) {
+	pcs := make([]uintptr, 1)
+	runtime.Callers(7, pcs[:])
+	if pcs[0] == 0 {
+		_, _ = buf.WriteString("??? 0")
 	}
-	if f.shorten {
-		short := file
-		for i := len(file) - 1; i > 0; i-- {
-			if file[i] == '/' {
-				short = file[i+1:]
-				break
-			}
-		}
-		file = short
-	}
+	fs := runtime.CallersFrames(pcs)
+	fs.Next()
+	//if f.shorten {
+	//	short := file
+	//	for i := len(file) - 1; i > 0; i-- {
+	//		if file[i] == '/' {
+	//			short = file[i+1:]
+	//			break
+	//		}
+	//	}
+	//	file = short
+	//}
+	//
+	//var funcName string
+	//if f.showFuncName {
+	//	funcName = runtime.FuncForPC(pc).Name()
+	//	if f.shorten {
+	//		name := funcName
+	//		for i := len(name) - 1; i > 0; i-- {
+	//			if funcName[i] == '.' {
+	//				name = funcName[i+1:]
+	//				break
+	//			}
+	//		}
+	//		funcName = name
+	//	}
+	//	funcName = " " + funcName
+	//}
+	//
+	//_ = fmt.Sprintf("%s %d%s", file, line, funcName)
 
-	var funcName string
-	if f.showFuncName {
-		funcName = runtime.FuncForPC(pc).Name()
-		if f.shorten {
-			name := funcName
-			for i := len(name) - 1; i > 0; i-- {
-				if funcName[i] == '.' {
-					name = funcName[i+1:]
-					break
-				}
-			}
-			funcName = name
-		}
-		funcName = " " + funcName
-	}
-
-	s := fmt.Sprintf("%s %d%s", file, line, funcName)
-	return s
 }
 
-func CallerField(shorten bool, showFuncName bool) *FieldBuilder {
+func CallerField(shorten bool, showFuncName bool) FieldBuilder {
 	f := &callerField{
+		Field:        Field{key: "caller"},
 		shorten:      shorten,
 		showFuncName: showFuncName,
 	}
-	return &FieldBuilder{field: f}
+	f.Field._child = f
+	return FieldBuilder{field: f}
 }
 
 // ====== CustomField ======
 
 type customField struct {
 	Field
-	handler func() string
+	handler func(buf *buffer.Buffer)
 }
 
-func (f *customField) ToString() string {
+func (f *customField) Log(buf *buffer.Buffer) {
 	if f.handler == nil {
-		return ""
+		return
 	}
-	s := f.handler()
-	return s
+	f.handler(buf)
 }
 
-func CustomField(handler func() string) *FieldBuilder {
+func CustomField(handler func(buf *buffer.Buffer)) FieldBuilder {
 	f := &customField{
 		handler: handler,
 	}
-	return &FieldBuilder{field: f}
+	f.Field._child = f
+	return FieldBuilder{field: f}
 }

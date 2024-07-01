@@ -1,6 +1,9 @@
 package logger
 
-import "github.com/yates-z/easel/logger/backend"
+import (
+	"github.com/yates-z/easel/logger/backend"
+	"reflect"
+)
 
 type Option func(*options)
 
@@ -16,7 +19,7 @@ func newOptions(defaultLevel LogLevel) *options {
 	}
 	for _, level := range DebugLevel.EnumIncremental() {
 		o.entityOptions[level] = &entityOptions{
-			backends: map[backend.Backend]struct{}{},
+			backends: map[string]backend.Backend{},
 		}
 	}
 	return o
@@ -27,7 +30,7 @@ type entityOptions struct {
 	skipLines int
 	fields    []LogField
 	encoders  []Encoder
-	backends  map[backend.Backend]struct{}
+	backends  map[string]backend.Backend
 }
 
 // WithLevel set default level for the logger.
@@ -56,10 +59,12 @@ func WithSkipLines(collection LogLevel, c int) Option {
 	}
 }
 
-func WithFields(collection LogLevel, field ...LogField) Option {
+func WithFields(collection LogLevel, fields ...FieldBuilder) Option {
 	return func(opts *options) {
 		for _, level := range collection.Enum() {
-			opts.entityOptions[level].fields = append(opts.entityOptions[level].fields, field...)
+			for _, field := range fields {
+				opts.entityOptions[level].fields = append(opts.entityOptions[level].fields, field.Build())
+			}
 		}
 	}
 }
@@ -77,7 +82,11 @@ func WithBackends(collection LogLevel, backends ...backend.Backend) Option {
 	return func(opts *options) {
 		for _, level := range collection.Enum() {
 			for _, b := range backends {
-				opts.entityOptions[level].backends[b] = struct{}{}
+				t := reflect.TypeOf(b)
+				if t.Kind() == reflect.Ptr {
+					t = t.Elem()
+				}
+				opts.entityOptions[level].backends[t.Name()] = b
 			}
 		}
 	}

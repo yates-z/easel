@@ -4,33 +4,40 @@ import (
 	"os"
 )
 
-var _ Backend = (*osBackend)(nil)
+var _ Backend = (*OsBackend)(nil)
 
-type osBackend struct {
+type OsBackend struct {
+	WriteSyncer
 }
 
 type OSBackendBuilder struct {
-	backend *osBackend
+	backend *OsBackend
 }
 
-func (b *OSBackendBuilder) Build() *osBackend {
+func (b *OSBackendBuilder) Build() *OsBackend {
 	return b.backend
 }
 
 func OSBackend() *OSBackendBuilder {
 	return &OSBackendBuilder{
-		backend: &osBackend{},
+		backend: &OsBackend{
+			os.Stderr,
+		},
 	}
 }
 
-func (O osBackend) Write(p []byte) (n int, err error) {
-	return os.Stderr.Write(p)
+func (b *OsBackend) Write(p []byte) (n int, err error) {
+	return b.WriteSyncer.Write(p)
 }
 
-func (O osBackend) Sync() error {
+func (b *OsBackend) Sync() error {
+	return b.WriteSyncer.Sync()
+}
+
+func (b *OsBackend) Close() error {
 	return nil
 }
 
-func (O osBackend) AllowANSI() bool {
+func (b *OsBackend) AllowANSI() bool {
 	return true
 }

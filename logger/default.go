@@ -5,30 +5,30 @@ import (
 	"github.com/yates-z/easel/logger/backend"
 )
 
-var DefaultLogger Loggable = nil
+var DefaultLogger *logger = nil
 
-func Debug(msg string, args ...any) {
-	DefaultLogger.Log(DebugLevel, msg, args...)
+func Debug(args ...any) {
+	DefaultLogger.Log(DebugLevel, args...)
 }
 
-func Info(msg string, args ...any) {
-	DefaultLogger.Log(InfoLevel, msg, args...)
+func Info(args ...any) {
+	DefaultLogger.Log(InfoLevel, args...)
 }
 
-func Warn(msg string, args ...any) {
-	DefaultLogger.Log(WarnLevel, msg, args...)
+func Warn(args ...any) {
+	DefaultLogger.Log(WarnLevel, args...)
 }
 
-func Error(msg string, args ...any) {
-	DefaultLogger.Log(ErrorLevel, msg, args...)
+func Error(args ...any) {
+	DefaultLogger.Log(ErrorLevel, args...)
 }
 
-func Fatal(msg string, args ...any) {
-	DefaultLogger.Log(FatalLevel, msg, args...)
+func Fatal(args ...any) {
+	DefaultLogger.Log(FatalLevel, args...)
 }
 
-func Panic(msg string, args ...any) {
-	DefaultLogger.Log(PanicLevel, msg, args...)
+func Panic(args ...any) {
+	DefaultLogger.Log(PanicLevel, args...)
 }
 
 func Debugf(format string, fmtArgs ...interface{}) {
@@ -55,32 +55,32 @@ func Panicf(format string, fmtArgs ...interface{}) {
 	DefaultLogger.Logf(PanicLevel, format, fmtArgs...)
 }
 
-func Debugs(msg string, fields ...LogField) {
+func Debugs(msg string, fields ...FieldBuilder) {
 	DefaultLogger.Logs(DebugLevel, msg, fields...)
 }
 
-func Infos(msg string, fields ...LogField) {
+func Infos(msg string, fields ...FieldBuilder) {
 	DefaultLogger.Logs(InfoLevel, msg, fields...)
 }
 
-func Warns(msg string, fields ...LogField) {
+func Warns(msg string, fields ...FieldBuilder) {
 	DefaultLogger.Logs(WarnLevel, msg, fields...)
 }
 
-func Errors(msg string, fields ...LogField) {
+func Errors(msg string, fields ...FieldBuilder) {
 	DefaultLogger.Logs(ErrorLevel, msg, fields...)
 }
 
-func Fatals(msg string, fields ...LogField) {
+func Fatals(msg string, fields ...FieldBuilder) {
 	DefaultLogger.Logs(FatalLevel, msg, fields...)
 }
 
-func Panics(msg string, fields ...LogField) {
+func Panics(msg string, fields ...FieldBuilder) {
 	DefaultLogger.Logs(PanicLevel, msg, fields...)
 }
 
 func Context(ctx context.Context) Logger {
-	return DefaultLogger.(Logger).Context(ctx)
+	return DefaultLogger.Context(ctx)
 }
 
 func UseDefault() {
@@ -89,25 +89,21 @@ func UseDefault() {
 		WithBackends(AnyLevel, backend.OSBackend().Build()),
 		WithSeparator(AnyLevel, "    "),
 		WithFields(AnyLevel,
-			DatetimeField("2006/01/02 15:04:03").Key("datetime").Build(),
+			DatetimeField("2006/01/02 15:04:03").Key("datetime"),
 		),
 		WithFields(DebugLevel|InfoLevel,
-			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Color(Green).Build(),
+			LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(Green),
 		),
 		WithFields(WarnLevel,
-			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Color(Yellow).Build(),
+			LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(Yellow),
 		),
 		WithFields(ErrorLevel|FatalLevel|PanicLevel,
-			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Color(Red).Build(),
+			LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(Red),
 		),
 		WithFields(AnyLevel,
-			MessageField().Key("msg").Build(),
-			CallerField(true, true).Key("caller").Build(),
+			MessageField().Key("msg"),
+			CallerField(true, true).Key("caller"),
 		),
 		WithEncoders(AnyLevel, PlainEncoder),
 	)
-}
-
-func Use(logger Loggable) {
-	DefaultLogger = logger
 }

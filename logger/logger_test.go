@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/yates-z/easel/logger/backend"
-	"log/slog"
+	"github.com/yates-z/easel/logger/buffer"
 	"os"
 	"runtime/debug"
 	"testing"
@@ -17,20 +17,20 @@ func TestLog(t *testing.T) {
 		WithSeparator(InfoLevel|WarnLevel, " "),
 		WithSeparator(ErrorLevel|FatalLevel|PanicLevel, "@@"),
 		WithFields(AnyLevel,
-			DatetimeField("2006-01-02 15:04:03").Key("datetime").Build(),
-			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Build(),
-			CallerField(true, false).Key("file").Build(),
-			FuncNameField(true).Key("func").Build(),
-			MessageField().Key("msg").Build(),
+			DatetimeField("2006-01-02 15:04:03").Key("datetime"),
+			LevelField().Key("level").Upper().Prefix("[").Suffix("]"),
+			CallerField(true, false).Key("file"),
+			FuncNameField(true).Key("func"),
+			MessageField().Key("msg"),
 			Group("sys_info",
-				CustomField(func() string {
+				CustomField(func(buf *buffer.Buffer) {
 					buildInfo, _ := debug.ReadBuildInfo()
-					return buildInfo.GoVersion
-				}).Key("go_version").Build(),
-				Group("sys", CustomField(func() string {
-					return fmt.Sprintf("%d", os.Getpid())
-				}).Key("pid").Build()).Build(),
-			).Build(),
+					buf.WriteString(buildInfo.GoVersion)
+				}).Key("go_version"),
+				Group("sys", CustomField(func(buf *buffer.Buffer) {
+					buf.WriteInt(int64(os.Getpid()))
+				}).Key("pid")),
+			),
 		),
 		WithEncoders(AnyLevel, PlainEncoder, JSONEncoder, LogFmtEncoder),
 	)
@@ -50,19 +50,19 @@ func TestLogf(t *testing.T) {
 		WithSeparator(InfoLevel|WarnLevel, " "),
 		WithSeparator(ErrorLevel|FatalLevel|PanicLevel, "@@"),
 		WithFields(AnyLevel,
-			DatetimeField("2006-01-02 15:04:03").Key("datetime").Build(),
-			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Build(),
-			CallerField(true, true).Key("caller").Build(),
-			MessageField().Key("msg").Build(),
+			DatetimeField("2006-01-02 15:04:03").Key("datetime"),
+			LevelField().Key("level").Upper().Prefix("[").Suffix("]"),
+			CallerField(true, true).Key("caller"),
+			MessageField().Key("msg"),
 			Group("sys_info",
-				CustomField(func() string {
+				CustomField(func(buf *buffer.Buffer) {
 					buildInfo, _ := debug.ReadBuildInfo()
-					return buildInfo.GoVersion
-				}).Key("go_version").Build(),
-				Group("sys", CustomField(func() string {
-					return fmt.Sprintf("%d", os.Getpid())
-				}).Key("pid").Build()).Build(),
-			).Build(),
+					buf.WriteString(buildInfo.GoVersion)
+				}).Key("go_version"),
+				Group("sys", CustomField(func(buf *buffer.Buffer) {
+					buf.WriteInt(int64(os.Getpid()))
+				}).Key("pid")),
+			),
 		),
 		WithEncoders(AnyLevel, PlainEncoder, JSONEncoder, LogFmtEncoder),
 	)
@@ -82,26 +82,26 @@ func TestLogWithColor(t *testing.T) {
 		WithSeparator(InfoLevel|WarnLevel, " "),
 		WithSeparator(ErrorLevel|FatalLevel|PanicLevel, " "),
 		WithFields(AnyLevel,
-			DatetimeField("2006-01-02 15:04:03").Key("datetime").Color(Yellow).Build(),
+			DatetimeField("2006-01-02 15:04:03").Key("datetime").Color(Yellow),
 		),
 		WithFields(ErrorLevel|FatalLevel|PanicLevel,
-			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Color(Red).Build(),
+			LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(Red),
 		),
 		WithFields(AnyLevel^ErrorLevel^FatalLevel^PanicLevel,
-			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Build(),
+			LevelField().Key("level").Upper().Prefix("[").Suffix("]"),
 		),
 		WithFields(AnyLevel,
-			CallerField(true, true).Key("caller").Color(Black).Background(Blue).Build(),
-			MessageField().Key("msg").Build(),
+			CallerField(true, true).Key("caller").Color(Black),
+			MessageField().Key("msg").Background(Blue),
 			Group("sys_info",
-				CustomField(func() string {
+				CustomField(func(buf *buffer.Buffer) {
 					buildInfo, _ := debug.ReadBuildInfo()
-					return buildInfo.GoVersion
-				}).Key("go_version").Build(),
-				Group("sys", CustomField(func() string {
-					return fmt.Sprintf("%d", os.Getpid())
-				}).Key("pid").Build()).Build(),
-			).Build(),
+					buf.WriteString(buildInfo.GoVersion)
+				}).Key("go_version"),
+				Group("sys", CustomField(func(buf *buffer.Buffer) {
+					buf.WriteInt(int64(os.Getpid()))
+				}).Key("pid")),
+			),
 		),
 		WithEncoders(AnyLevel, PlainEncoder, JSONEncoder, LogFmtEncoder),
 	)
@@ -135,61 +135,46 @@ func TestLogs(t *testing.T) {
 		WithBackends(AnyLevel, backend.OSBackend().Build()),
 		WithSeparator(AnyLevel, "    "),
 		WithFields(AnyLevel,
-			DatetimeField("2006/01/02 15:04:03").Key("datetime").Build(),
+			DatetimeField("2006/01/02 15:04:03").Key("datetime"),
 		),
 		WithFields(DebugLevel|InfoLevel,
-			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Color(Green).Build(),
+			LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(Green),
 		),
 		WithFields(WarnLevel,
-			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Color(Yellow).Build(),
+			LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(Yellow),
 		),
 		WithFields(ErrorLevel|FatalLevel|PanicLevel,
-			LevelField(true).Key("level").Upper().Prefix("[").Suffix("]").Color(Red).Build(),
+			LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(Red),
 		),
 		WithFields(AnyLevel,
-			MessageField().Key("msg").Build(),
-			CallerField(true, true).Key("caller").Build(),
+			MessageField().Key("msg"),
+			CallerField(true, true).Key("caller"),
 		),
 		WithEncoders(AnyLevel, PlainEncoder, JSONEncoder, LogFmtEncoder),
 	)
-	l.Debugs("hello debug", F("test", "this is a test").Build())
+	l.Debugs("hello debug", F("test", "this is a test"))
 	l.Debugs("hello debug",
-		F("test", 6).Color(Yellow).Build(),
-		F("test", 7).Color(Blue).Build(),
-		F("tset", 8).Color(Green).Build(),
-	)
-}
-
-// BenchmarkDefaultLog-10
-// 450146             11364 ns/op            1547 B/op         53 allocs/op
-// 478185             11418 ns/op            1547 B/op         53 allocs/op
-// 467475             11527 ns/op            1547 B/op         53 allocs/op
-func BenchmarkDefaultLog(b *testing.B) {
-	l := NewLogger(
-		WithLevel(InfoLevel),
-		WithBackends(AnyLevel, backend.OSBackend().Build()),
-		WithSeparator(AnyLevel, " "),
-		WithFields(AnyLevel,
-			DatetimeField("2006-01-02 15:04:03").Key("datetime").Build(),
-			LevelField(true).Key("level").Upper().Build(),
-			MessageField().Key("msg").Build(),
+		Group("TEST",
+			F("test", "6").Color(Yellow),
+			F("test", "7").Color(Blue),
+			F("test", "7").Color(Blue),
 		),
-		WithEncoders(AnyLevel, PlainEncoder),
+		F("tset", "8").Color(Green),
 	)
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		l.Info("hello world")
-	}
 }
 
-// BenchmarkSlog-10    	  319574	      4160 ns/op
-// 477282             11529 ns/op               0 B/op          0 allocs/op
-// 476253             11671 ns/op               0 B/op          0 allocs/op
-// 455965             11652 ns/op               0 B/op          0 allocs/op
-func BenchmarkSlog(b *testing.B) {
-	s := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		s.Info("hello world")
-	}
+func TestGetBackends(t *testing.T) {
+	l := NewLogger(
+		WithBackends(DebugLevel, backend.OSBackend().Build()),
+		WithBackends(InfoLevel, backend.DefaultFileBackend().Build()),
+		WithBackends(WarnLevel, backend.DefaultFileBackend().Build()),
+	)
+	fmt.Println(l.Backends())
+	l = NewLogger(
+		WithLevel(DebugLevel),
+		WithBackends(DebugLevel, backend.OSBackend().Build()),
+		WithBackends(InfoLevel, backend.DefaultFileBackend().Build()),
+		WithBackends(WarnLevel, backend.DefaultFileBackend().Build()),
+	)
+	fmt.Println(l.Backends())
 }

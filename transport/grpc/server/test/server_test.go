@@ -1,12 +1,13 @@
-package server
+package test
 
 import (
 	"context"
-	"github.com/yates-z/easel/api"
+	"github.com/yates-z/easel/transport/grpc/server"
 	"github.com/yates-z/easel/transport/grpc/server/compressor/zlib"
 	"github.com/yates-z/easel/transport/grpc/server/interceptor/ratelimit"
 	"github.com/yates-z/easel/transport/grpc/server/interceptor/recovery"
 	"github.com/yates-z/easel/transport/grpc/server/interceptor/timeout"
+	"github.com/yates-z/easel/transport/grpc/server/test/api"
 	"testing"
 	"time"
 )
@@ -30,20 +31,20 @@ func (s *Server2) SayHello(ctx context.Context, in *api.HelloRequest) (*api.Hell
 }
 
 func TestServeGrpc(t *testing.T) {
-	server := NewServer(
-		Address("0.0.0.0:9100"),
-		Compressor(zlib.New()),
-		UnaryInterceptor(
+	s := server.NewServer(
+		server.Address("0.0.0.0:9100"),
+		server.Compressor(zlib.New()),
+		server.UnaryInterceptor(
 			recovery.UnaryServerInterceptor(),
 			timeout.UnaryServerInterceptor(5*time.Second),
 			//ratelimit.UnaryServerInterceptor(ratelimit.NewTokenBucket(time.Second, 1, 10)),
 			ratelimit.UnaryServerInterceptor(ratelimit.NewLeakyBucket(1, 2)),
 		),
-		StreamInterceptor(recovery.StreamServerInterceptor()),
-		AllowReflection(true),
+		server.StreamInterceptor(recovery.StreamServerInterceptor()),
+		server.AllowReflection(true),
 	)
-	api.RegisterGreeterServer(server, &Server2{})
-	server.MustRun()
+	api.RegisterGreeterServer(s, &Server2{})
+	s.MustRun()
 
 	//s := grpc.NewServer()
 	//api.RegisterGreeterServer(s, &Server2{})

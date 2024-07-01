@@ -1,0 +1,19 @@
+syntax = "proto3";                        // 版本声明，使用Protocol Buffers v3版本
+option go_package = ".;api";             //path: 生成的go文件路径，name:生成go文件所属包名
+package pb;                              // 包名（在go语言里可以省略）
+
+// 定义服务
+service Greeter {
+    // SayHello 方法
+    rpc SayHello (HelloRequest) returns (HelloResponse) {}
+}
+
+// 请求消息
+message HelloRequest {
+    string name = 1;
+}
+
+// 响应消息
+message HelloResponse {
+    string replay = 1;
+}

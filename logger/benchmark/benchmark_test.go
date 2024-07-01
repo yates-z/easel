@@ -6,13 +6,14 @@ import (
 	"go.uber.org/zap"
 	"log/slog"
 	"os"
+	"strconv"
 	"testing"
 )
 
 // BenchmarkDefaultLog-10
-// 34527             34066 ns/op               0 B/op          0 allocs/op
-// 33933             34096 ns/op               0 B/op          0 allocs/op
-// 34754             34128 ns/op               0 B/op          0 allocs/op
+// 27848             41477 ns/op               5 B/op          0 allocs/op
+// 28186             41704 ns/op               5 B/op          0 allocs/op
+// 28327             41598 ns/op               5 B/op          0 allocs/op
 func BenchmarkDefault(b *testing.B) {
 	log := logger.NewLogger(
 		logger.WithLevel(logger.InfoLevel),
@@ -24,50 +25,46 @@ func BenchmarkDefault(b *testing.B) {
 			logger.MessageField(),
 			//logger.TimeField(logger.UnixMilli).Background(logger.Green),
 			//logger.FuncNameField(true),
-			logger.CallerField(true, true),
+			//logger.CallerField(true, true),
 		),
 		logger.WithEncoders(logger.AnyLevel, logger.LogFmtEncoder),
 	)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		log.Info("Hello World")
-		//log.Warns("hello warns",
-		//	logger.Group("TEST",
-		//		logger.F("test", "6").Color(logger.Green),
-		//		logger.F("test", "7").Color(logger.Yellow),
-		//		logger.F("test", "7").Color(logger.Yellow),
-		//	),
-		//	logger.F("tset", "8"),
-		//)
+		//log.Info("Hello World", n)
+		log.Infos("hello infos",
+			logger.F("", strconv.Itoa(n)),
+			logger.F("", strconv.Itoa(n)),
+		)
 	}
 }
 
 // BenchmarkSlog-10    	  319574	      4160 ns/op
-// 477282             11529 ns/op               0 B/op          0 allocs/op
-// 476253             11671 ns/op               0 B/op          0 allocs/op
-// 455965             11652 ns/op               0 B/op          0 allocs/op
+// 84526             13487 ns/op              48 B/op          1 allocs/op
+// 86983             13399 ns/op              48 B/op          1 allocs/op
+// 84753             13311 ns/op              48 B/op          1 allocs/op
 func BenchmarkSlog(b *testing.B) {
 	s := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		s.Info("hello world")
+		s.Info("hello world", slog.Int("", n), slog.Int("a", n), slog.Int("b", n))
 
 	}
 }
 
-// 38714661               157.7 ns/op             2 B/op          0 allocs/op
-// 38072233               150.7 ns/op             2 B/op          0 allocs/op
-// 34610774               152.1 ns/op             2 B/op          0 allocs/op
+// 70202             16450 ns/op             281 B/op          3 allocs/op
+// 70435             16486 ns/op             280 B/op          3 allocs/op
+// 70279             16521 ns/op             280 B/op          3 allocs/op
 func BenchmarkZap(b *testing.B) {
 	log, _ := zap.NewProduction()
-	defer log.Sync()
+	//defer log.Sync()
 
 	sugar := log.Sugar()
-	sugar = sugar.WithOptions(zap.AddCaller())
 	b.ResetTimer()
 	n := 0
 	for ; n < b.N; n++ {
-		sugar.Info("hello world")
+		sugar.Info("hello world", n)
+		//fmt.Println(n)
 		//sugar.Infof("hello %d", n)
 	}
 	//fmt.Println(n)

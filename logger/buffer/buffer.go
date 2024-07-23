@@ -1,7 +1,7 @@
 package buffer
 
 import (
-	"github.com/yates-z/easel/internal/pool"
+	"github.com/yates-z/easel/core/pool"
 	"strconv"
 )
 

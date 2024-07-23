@@ -3,7 +3,7 @@ package logger
 import (
 	"context"
 	"fmt"
-	"github.com/yates-z/easel/internal/pool"
+	"github.com/yates-z/easel/core/pool"
 	"github.com/yates-z/easel/logger/backend"
 	"os"
 )

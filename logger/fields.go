@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"github.com/yates-z/easel/internal/pool"
+	"github.com/yates-z/easel/core/pool"
 	"github.com/yates-z/easel/logger/buffer"
 	"runtime"
 	"time"

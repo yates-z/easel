@@ -13,9 +13,9 @@ func assert(condition bool, message string) {
 }
 
 func BenchmarkVariant(b *testing.B) {
-	v := New(int64(-128))
+	v := New(float32(-128.32))
 	for i := 0; i < b.N; i++ {
-		fmt.Println(v.ToString())
+		fmt.Println(v.ToFloat64())
 	}
 	b.ReportAllocs()
 }
@@ -234,7 +234,7 @@ func TestVariant_ToFloat64(t *testing.T) {
 	v = New("1abc")
 	assert(v.ToFloat64() == 0, "12")
 	v = New(float32(-86.2))
-	assert(v.ToFloat64() == float64(float32(-86.2)), "13")
+	assert(v.ToFloat64() == -86.2, "13")
 	v = New(-86.1)
 	assert(v.ToFloat64() == -86.1, "14")
 }

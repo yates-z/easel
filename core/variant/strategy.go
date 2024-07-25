@@ -1,7 +1,6 @@
 package variant
 
 import (
-	"bytes"
 	"encoding/binary"
 	"math"
 	"strconv"
@@ -558,23 +557,11 @@ func (c float32Converter) FromUint64(v Variant) float32 {
 }
 
 func (c float32Converter) FromFloat32(v Variant) float32 {
-	var f float32
-	buf := bytes.NewReader(v.Data)
-	err := binary.Read(buf, binary.BigEndian, &f)
-	if err != nil {
-		return 0
-	}
-	return f
+	return math.Float32frombits(binary.BigEndian.Uint32(v.Data))
 }
 
 func (c float32Converter) FromFloat64(v Variant) float32 {
-	var f float64
-	buf := bytes.NewReader(v.Data)
-	err := binary.Read(buf, binary.BigEndian, &f)
-	if err != nil {
-		return 0
-	}
-	return float32(f)
+	return float32(math.Float64frombits(binary.BigEndian.Uint64(v.Data)))
 }
 
 func newFloat32Converter() *float32Converter {
@@ -674,23 +661,17 @@ func (c float64Converter) FromUint64(v Variant) float64 {
 }
 
 func (c float64Converter) FromFloat32(v Variant) float64 {
-	var f float32
-	buf := bytes.NewReader(v.Data)
-	err := binary.Read(buf, binary.BigEndian, &f)
+	f := math.Float32frombits(binary.BigEndian.Uint32(v.Data))
+	str := strconv.FormatFloat(float64(f), 'g', -1, 32)
+	f64, err := strconv.ParseFloat(str, 64)
 	if err != nil {
 		return 0
 	}
-	return float64(f)
+	return f64
 }
 
 func (c float64Converter) FromFloat64(v Variant) float64 {
-	var f float64
-	buf := bytes.NewReader(v.Data)
-	err := binary.Read(buf, binary.BigEndian, &f)
-	if err != nil {
-		return 0
-	}
-	return f
+	return math.Float64frombits(binary.BigEndian.Uint64(v.Data))
 }
 func newFloat64Converter() *float64Converter {
 	c := &float64Converter{}

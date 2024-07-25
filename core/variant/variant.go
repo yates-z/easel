@@ -4,11 +4,14 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"strconv"
-	"unsafe"
+	"reflect"
 )
 
-const intSize = 32 << (^uint(0) >> 63)
+const (
+	intSize = 32 << (^uint(0) >> 63)
+	maxUint = 1<<intSize - 1
+	maxInt  = 1<<(intSize-1) - 1
+)
 
 type Variant struct {
 	Type Kind
@@ -20,70 +23,52 @@ func (v Variant) String() string {
 }
 
 func (v Variant) ToString() string {
-	switch v.Type {
-	case String:
-		return *(*string)(unsafe.Pointer(&v.Data))
-	case Bool:
-		if v.Data[0] == 0x00 {
-			return "false"
-		} else {
-			return "true"
-		}
-	case Int:
-		var i int
-		if intSize == 32 {
-			i = int(binary.BigEndian.Uint32(v.Data))
-		} else if intSize == 64 {
-			i = int(binary.BigEndian.Uint64(v.Data))
-		}
-		return strconv.Itoa(i)
-	case Int8:
-		i := v.Data[0]
-		s := strconv.AppendInt(make([]byte, 0), int64(int8(i)), 10)
-		return *(*string)(unsafe.Pointer(&s))
-	case Int16:
-		i := int16(binary.BigEndian.Uint16(v.Data))
-		return strconv.Itoa(int(i))
-	case Int32:
-		i := int32(binary.BigEndian.Uint32(v.Data))
-		return strconv.Itoa(int(i))
-	case Int64:
-		i := int64(binary.BigEndian.Uint64(v.Data))
-		return strconv.Itoa(int(i))
-	case Uint:
-		var i uint64
-		if intSize == 32 {
-			i = uint64(binary.BigEndian.Uint32(v.Data))
-		} else if intSize == 64 {
-			i = binary.BigEndian.Uint64(v.Data)
-		}
-		return strconv.FormatUint(i, 10)
-	case Uint8:
-		i := v.Data[0]
-		s := strconv.AppendUint(make([]byte, 0), uint64(i), 10)
-		return *(*string)(unsafe.Pointer(&s))
-	case Uint16:
-		i := uint64(binary.BigEndian.Uint16(v.Data))
-		return strconv.FormatUint(i, 10)
-	case Uint32:
-		i := uint64(binary.BigEndian.Uint32(v.Data))
-		return strconv.FormatUint(i, 10)
-	case Uint64:
-		i := binary.BigEndian.Uint64(v.Data)
-		return strconv.FormatUint(i, 10)
-	case Float32:
-		f := math.Float32frombits(binary.BigEndian.Uint32(v.Data))
-		return strconv.FormatFloat(float64(f), 'g', -1, 32)
-	case Float64:
-		f := math.Float64frombits(binary.BigEndian.Uint64(v.Data))
-		return strconv.FormatFloat(f, 'g', -1, 64)
-	default:
-		return ""
+
+	if fn := Strategies.string.Get(v.Type); fn != nil {
+		return fn(v)
 	}
+	return ""
 }
 
-func (v Variant) ToBytes() string {
-	return ""
+func (v Variant) ToInt() int {
+	if fn := Strategies.int.Get(v.Type); fn != nil {
+		return fn(v)
+	}
+	return 0
+}
+
+func (v Variant) ToBytes() []byte {
+	return v.Data
+}
+
+func (v Variant) ToUint() uint {
+	if fn := Strategies.uint.Get(v.Type); fn != nil {
+		return fn(v)
+	}
+	return 0
+}
+
+func (v Variant) ToBool() bool {
+	for _, ch := range v.Data {
+		if ch != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (v Variant) ToFloat32() float32 {
+	if fn := Strategies.float32.Get(v.Type); fn != nil {
+		return fn(v)
+	}
+	return 0
+}
+
+func (v Variant) ToFloat64() float64 {
+	if fn := Strategies.float64.Get(v.Type); fn != nil {
+		return fn(v)
+	}
+	return 0
 }
 
 func New(v any) Variant {
@@ -160,5 +145,6 @@ func New(v any) Variant {
 		variant.Data = append(variant.Data, make([]byte, 8)...)
 		binary.BigEndian.PutUint64(variant.Data, math.Float64bits(v.(float64)))
 	}
+	reflect.TypeOf(variant)
 	return variant
 }

@@ -13,9 +13,9 @@ func assert(condition bool, message string) {
 }
 
 func BenchmarkVariant(b *testing.B) {
-	v := New(float32(-128.32))
+	v := New("-128")
 	for i := 0; i < b.N; i++ {
-		fmt.Println(v.ToFloat64())
+		fmt.Println(v.ToInt())
 	}
 	b.ReportAllocs()
 }
@@ -237,4 +237,45 @@ func TestVariant_ToFloat64(t *testing.T) {
 	assert(v.ToFloat64() == -86.2, "13")
 	v = New(-86.1)
 	assert(v.ToFloat64() == -86.1, "14")
+}
+
+func TestVariant_Empty(t *testing.T) {
+	v := Variant{Type: Bool}
+	assert(v.ToString() == "false", "")
+	assert(!v.ToBool(), "")
+	assert(v.ToInt() == 0, "")
+	assert(v.ToUint() == 0, "")
+	assert(v.ToFloat32() == 0, "")
+	assert(v.ToFloat64() == 0, "")
+
+	v = Variant{Type: String}
+	assert(v.ToString() == "", "1")
+	assert(!v.ToBool(), "2")
+	assert(v.ToInt() == 0, "3")
+	assert(v.ToUint() == 0, "4")
+	assert(v.ToFloat32() == 0, "5")
+	assert(v.ToFloat64() == 0, "6")
+
+	v = Variant{Type: Int}
+	assert(v.ToString() == "0", "")
+	assert(!v.ToBool(), "")
+	assert(v.ToInt() == 0, "")
+	assert(v.ToUint() == 0, "")
+	assert(v.ToFloat32() == 0, "")
+	assert(v.ToFloat64() == 0, "")
+
+	v = Variant{Type: Float32}
+	assert(v.ToString() == "0", "")
+	assert(!v.ToBool(), "")
+	assert(v.ToInt() == 0, "")
+	assert(v.ToUint() == 0, "")
+	assert(v.ToFloat32() == 0, "")
+	assert(v.ToFloat64() == 0, "")
+	v = Variant{Type: Float64}
+	assert(v.ToString() == "0", "")
+	assert(!v.ToBool(), "")
+	assert(v.ToInt() == 0, "")
+	assert(v.ToUint() == 0, "")
+	assert(v.ToFloat32() == 0, "")
+	assert(v.ToFloat64() == 0, "")
 }

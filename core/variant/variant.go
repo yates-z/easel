@@ -71,6 +71,28 @@ func (v Variant) ToFloat64() float64 {
 	return 0
 }
 
+// UnmarshalJSON implements the json.Unmarshaler interface.
+//func (v *Variant) UnmarshalJSON(data []byte) error {
+//	if data[0] == '"' && data[len(data)-1] == '"' {
+//		v.Type = String
+//		v.Data = data[1 : len(data)-1]
+//	} else if data[0] == 't' {
+//		v.Type = Bool
+//		v.Data = append(v.Data, 0x01)
+//	} else if data[0] == 'f' {
+//		v.Type = Bool
+//		v.Data = append(v.Data, 0x00)
+//	} else if data[0] == 'n' {
+//		v.Type = Invalid
+//	}
+//	return nil
+//}
+
+// MarshalJSON implements the json.Marshaler interface.
+func (v Variant) MarshalJSON() ([]byte, error) {
+	return v.Data, nil
+}
+
 func New(v any) Variant {
 	variant := Variant{
 		Type: Invalid,

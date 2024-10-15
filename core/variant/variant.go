@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"reflect"
 )
 
 const (
@@ -72,21 +71,23 @@ func (v Variant) ToFloat64() float64 {
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
-//func (v *Variant) UnmarshalJSON(data []byte) error {
-//	if data[0] == '"' && data[len(data)-1] == '"' {
-//		v.Type = String
-//		v.Data = data[1 : len(data)-1]
-//	} else if data[0] == 't' {
-//		v.Type = Bool
-//		v.Data = append(v.Data, 0x01)
-//	} else if data[0] == 'f' {
-//		v.Type = Bool
-//		v.Data = append(v.Data, 0x00)
-//	} else if data[0] == 'n' {
-//		v.Type = Invalid
-//	}
-//	return nil
-//}
+func (v *Variant) UnmarshalJSON(data []byte) error {
+	v.Type = String
+	if data[0] == '"' && data[len(data)-1] == '"' {
+		v.Data = data[1 : len(data)-1]
+	} else if data[0] == 't' {
+		v.Type = Bool
+		v.Data = append(v.Data, 0x01)
+	} else if data[0] == 'f' {
+		v.Type = Bool
+		v.Data = append(v.Data, 0x00)
+	} else if data[0] == 'n' {
+		v.Type = Invalid
+	} else {
+		v.Data = data
+	}
+	return nil
+}
 
 // MarshalJSON implements the json.Marshaler interface.
 func (v Variant) MarshalJSON() ([]byte, error) {
@@ -167,6 +168,5 @@ func New(v any) Variant {
 		variant.Data = append(variant.Data, make([]byte, 8)...)
 		binary.BigEndian.PutUint64(variant.Data, math.Float64bits(v.(float64)))
 	}
-	reflect.TypeOf(variant)
 	return variant
 }

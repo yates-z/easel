@@ -1,6 +1,7 @@
 package variant
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"testing"
@@ -278,4 +279,18 @@ func TestVariant_Empty(t *testing.T) {
 	assert(v.ToUint() == 0, "")
 	assert(v.ToFloat32() == 0, "")
 	assert(v.ToFloat64() == 0, "")
+}
+
+func Test_UnmarshalJson(t *testing.T) {
+	data := []byte(`{"hello": "world!", "age": 36, "weight": 60.123, "is_male": null}`)
+	m := map[string]Variant{}
+	err := json.Unmarshal(data, &m)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(m["hello"].ToString())
+	fmt.Println(m["age"].ToString())
+	fmt.Println(m["weight"].ToString())
+	fmt.Println(m["is_male"].ToBool())
+	fmt.Println(m)
 }

@@ -100,13 +100,13 @@ func New(v any) Variant {
 		Data: make([]byte, 0, 8),
 	}
 
-	switch v.(type) {
+	switch v := v.(type) {
 	case string:
 		variant.Type = String
-		variant.Data = append(variant.Data, v.(string)...)
+		variant.Data = append(variant.Data, v...)
 	case bool:
 		variant.Type = Bool
-		if v.(bool) {
+		if v {
 			variant.Data = append(variant.Data, 0x01)
 		} else {
 			variant.Data = append(variant.Data, 0x00)
@@ -115,58 +115,58 @@ func New(v any) Variant {
 		variant.Type = Int
 		if intSize == 32 {
 			variant.Data = append(variant.Data, make([]byte, 4)...)
-			binary.BigEndian.PutUint32(variant.Data, uint32(v.(int)))
+			binary.BigEndian.PutUint32(variant.Data, uint32(v))
 		} else if intSize == 64 {
 			variant.Data = append(variant.Data, make([]byte, 8)...)
-			binary.BigEndian.PutUint64(variant.Data, uint64(v.(int)))
+			binary.BigEndian.PutUint64(variant.Data, uint64(v))
 		}
 	case int8:
 		variant.Type = Int8
-		variant.Data = append(variant.Data, byte(v.(int8)))
+		variant.Data = append(variant.Data, byte(v))
 	case int16:
 		variant.Type = Int16
 		variant.Data = append(variant.Data, make([]byte, 2)...)
-		binary.BigEndian.PutUint16(variant.Data, uint16(v.(int16)))
+		binary.BigEndian.PutUint16(variant.Data, uint16(v))
 	case int32:
 		variant.Type = Int32
 		variant.Data = append(variant.Data, make([]byte, 4)...)
-		binary.BigEndian.PutUint32(variant.Data, uint32(v.(int32)))
+		binary.BigEndian.PutUint32(variant.Data, uint32(v))
 	case int64:
 		variant.Type = Int64
 		variant.Data = append(variant.Data, make([]byte, 8)...)
-		binary.BigEndian.PutUint64(variant.Data, uint64(v.(int64)))
+		binary.BigEndian.PutUint64(variant.Data, uint64(v))
 	case uint:
 		variant.Type = Uint
 		if intSize == 32 {
 			variant.Data = append(variant.Data, make([]byte, 4)...)
-			binary.BigEndian.PutUint32(variant.Data, uint32(v.(uint)))
+			binary.BigEndian.PutUint32(variant.Data, uint32(v))
 		} else if intSize == 64 {
 			variant.Data = append(variant.Data, make([]byte, 8)...)
-			binary.BigEndian.PutUint64(variant.Data, uint64(v.(uint)))
+			binary.BigEndian.PutUint64(variant.Data, uint64(v))
 		}
 	case uint8:
 		variant.Type = Uint8
-		variant.Data = append(variant.Data, v.(uint8))
+		variant.Data = append(variant.Data, v)
 	case uint16:
 		variant.Type = Uint16
 		variant.Data = append(variant.Data, make([]byte, 2)...)
-		binary.BigEndian.PutUint16(variant.Data, v.(uint16))
+		binary.BigEndian.PutUint16(variant.Data, v)
 	case uint32:
 		variant.Type = Uint32
 		variant.Data = append(variant.Data, make([]byte, 4)...)
-		binary.BigEndian.PutUint32(variant.Data, v.(uint32))
+		binary.BigEndian.PutUint32(variant.Data, v)
 	case uint64:
 		variant.Type = Uint64
 		variant.Data = append(variant.Data, make([]byte, 8)...)
-		binary.BigEndian.PutUint64(variant.Data, v.(uint64))
+		binary.BigEndian.PutUint64(variant.Data, v)
 	case float32:
 		variant.Type = Float32
 		variant.Data = append(variant.Data, make([]byte, 4)...)
-		binary.BigEndian.PutUint32(variant.Data, math.Float32bits(v.(float32)))
+		binary.BigEndian.PutUint32(variant.Data, math.Float32bits(v))
 	case float64:
 		variant.Type = Float64
 		variant.Data = append(variant.Data, make([]byte, 8)...)
-		binary.BigEndian.PutUint64(variant.Data, math.Float64bits(v.(float64)))
+		binary.BigEndian.PutUint64(variant.Data, math.Float64bits(v))
 	}
 	return variant
 }

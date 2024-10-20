@@ -2,43 +2,197 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
-type HandlerFunc func(*Context) interface{}
+type HandlerFunc func(*Context) (any, error)
 
 var _ context.Context = (*Context)(nil)
 
 // Context is an HTTP request Context. It defines core functions sets of this http.server.
 type Context struct {
-	request  *http.Request
-	response http.ResponseWriter
-}
+	Request  *http.Request
+	Response http.ResponseWriter
 
-func (c *Context) Deadline() (deadline time.Time, ok bool) {
-	ctx := c.request.Context()
-	return ctx.Deadline()
-}
-
-func (c *Context) Done() <-chan struct{} {
-	ctx := c.request.Context()
-	return ctx.Done()
-}
-
-func (c *Context) Err() error {
-	ctx := c.request.Context()
-	return ctx.Err()
-}
-
-func (c *Context) Value(key any) any {
-	ctx := c.request.Context()
-	return ctx.Value(key)
+	fullPath string
+	// SameSite allows a server to define a cookie attribute making it impossible for
+	// the browser to send this cookie along with cross-site requests.
+	sameSite http.SameSite
 }
 
 func newContext(req *http.Request, resp http.ResponseWriter) *Context {
 	return &Context{
-		request:  req,
-		response: resp,
+		Request:  req,
+		Response: resp,
 	}
+}
+
+func (c *Context) Deadline() (deadline time.Time, ok bool) {
+	ctx := c.Request.Context()
+	return ctx.Deadline()
+}
+
+func (c *Context) Done() <-chan struct{} {
+	ctx := c.Request.Context()
+	return ctx.Done()
+}
+
+func (c *Context) Err() error {
+	ctx := c.Request.Context()
+	return ctx.Err()
+}
+
+func (c *Context) Value(key any) any {
+	ctx := c.Request.Context()
+	return ctx.Value(key)
+}
+
+func (c *Context) Redirect(url string) {
+	http.Redirect(c.Response, c.Request, url, http.StatusMovedPermanently)
+}
+
+func (c *Context) Param(key string) string {
+	return c.Request.PathValue(key)
+}
+
+func (c *Context) FullPath() string {
+	return c.fullPath
+}
+
+// File writes the specified file into the body stream in an efficient way.
+func (c *Context) File(filepath string) {
+	http.ServeFile(c.Response, c.Request, filepath)
+}
+
+// FileFromFS writes the specified file from http.FileSystem into the body stream in an efficient way.
+func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
+	defer func(old string) {
+		c.Request.URL.Path = old
+	}(c.Request.URL.Path)
+
+	c.Request.URL.Path = filepath
+
+	http.FileServer(fs).ServeHTTP(c.Response, c.Request)
+}
+
+// ContentType returns the Content-Type header of the request.
+func (c *Context) ContentType() string {
+	content := c.Request.Header.Get("Content-Type")
+	for i, char := range content {
+		if char == ' ' || char == ';' {
+			return content[:i]
+		}
+	}
+	return content
+}
+
+// IsWebsocket returns true if the request headers indicate that a websocket
+// handshake is being initiated by the client.
+func (c *Context) IsWebsocket() bool {
+	if strings.Contains(strings.ToLower(c.Request.Header.Get("Connection")), "upgrade") &&
+		strings.EqualFold(c.Request.Header.Get("Upgrade"), "websocket") {
+		return true
+	}
+	return false
+}
+
+// RemoteIP parses the IP from Request.RemoteAddr, normalizes and returns the IP (without the port).
+func (c *Context) RemoteIP() string {
+	ip, _, err := net.SplitHostPort(strings.TrimSpace(c.Request.RemoteAddr))
+	if err != nil {
+		return ""
+	}
+	return ip
+}
+
+/***************************/
+/********* RESPONSE ********/
+/***************************/
+
+// Status sets the HTTP response code.
+func (c *Context) SetStatus(code int) {
+	c.Response.WriteHeader(code)
+}
+
+// SetSameSite with cookie
+func (c *Context) SetSameSite(samesite http.SameSite) {
+	c.sameSite = samesite
+}
+
+// SetHeader is an intelligent shortcut for c.Response.Header().Set(key, value).
+// It writes a header in the response.
+// If value == "", this method removes the header `c.Response.Header().Del(key)`
+func (c *Context) SetHeader(key, value string) {
+	if value == "" {
+		c.Response.Header().Del(key)
+		return
+	}
+	c.Response.Header().Set(key, value)
+}
+
+// GetHeader returns value from request headers.
+func (c *Context) GetHeader(key string) string {
+	return c.Request.Header.Get(key)
+}
+
+// GetRawData returns stream data.
+func (c *Context) GetRawData() ([]byte, error) {
+	if c.Request.Body == nil {
+		return nil, errors.New("cannot read nil body")
+	}
+	return io.ReadAll(c.Request.Body)
+}
+
+// SetCookie adds a Set-Cookie header to the ResponseWriter's headers.
+// The provided cookie must have a valid Name. Invalid cookies may be
+// silently dropped.
+func (c *Context) SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool) {
+	if path == "" {
+		path = "/"
+	}
+	http.SetCookie(c.Response, &http.Cookie{
+		Name:     name,
+		Value:    url.QueryEscape(value),
+		MaxAge:   maxAge,
+		Path:     path,
+		Domain:   domain,
+		SameSite: c.sameSite,
+		Secure:   secure,
+		HttpOnly: httpOnly,
+	})
+}
+
+func (c *Context) String(code int, text string) error {
+	c.SetStatus(code)
+
+	c.Response.Header().Set("Content-Type", "text/plain")
+
+	_, err := c.Response.Write([]byte(text))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Context) JSON(code int, obj any) error {
+	c.SetStatus(code)
+
+	header := c.Response.Header()
+	if val := header["Content-Type"]; len(val) == 0 {
+		header["Content-Type"] = []string{"application/json; charset=utf-8"}
+	}
+
+	jsonBytes, err := json.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	_, err = c.Response.Write(jsonBytes)
+	return err
 }

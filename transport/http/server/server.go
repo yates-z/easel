@@ -27,8 +27,22 @@ func Address(addr string) ServerOption {
 
 // TLSConfig with TLS config.
 func TLSConfig(c *tls.Config) ServerOption {
-	return func(o *Server) {
-		o.tlsConf = c
+	return func(s *Server) {
+		s.tlsConf = c
+	}
+}
+
+// Middlewares with global middleware.
+func Middlewares(middlewares ...Middleware) ServerOption {
+	return func(s *Server) {
+		s.Use(middlewares...)
+	}
+}
+
+// TLSConfig with showInfo config.
+func ShowInfo(isShow bool) ServerOption {
+	return func(s *Server) {
+		s.showInfo = isShow
 	}
 }
 
@@ -39,14 +53,18 @@ type Server struct {
 	network  string
 	address  string
 	tlsConf  *tls.Config
+
+	showInfo bool
 }
 
-func NewServer(opts ...ServerOption) *Server {
+func New(opts ...ServerOption) *Server {
 	server := &Server{
-		Router:  NewRouter(),
 		network: "tcp",
 		address: ":80",
+
+		showInfo: false,
 	}
+	server.Router = NewRouter(server)
 	for _, o := range opts {
 		o(server)
 	}
@@ -66,6 +84,9 @@ func (s *Server) Run(ctx context.Context) error {
 		s.listener = listener
 		logger.Infof("[http] server listening on: %s", s.listener.Addr().String())
 	}
+	if s.tlsConf != nil {
+		return s.ServeTLS(s.listener, "", "")
+	}
 	return s.Serve(s.listener)
 }
 
@@ -77,6 +98,9 @@ func (s *Server) MustRun(ctx context.Context) {
 		}
 		s.listener = listener
 		logger.Infof("[http] server listening on: %s", s.listener.Addr().String())
+	}
+	if s.tlsConf != nil {
+		logger.Fatal(s.ServeTLS(s.listener, "", ""))
 	}
 	logger.Fatal(s.Serve(s.listener))
 }

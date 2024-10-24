@@ -3,10 +3,12 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"html/template"
 	"net"
 	"net/http"
 
 	"github.com/yates-z/easel/logger"
+	templ "github.com/yates-z/easel/transport/http/server/template"
 )
 
 type ServerOption func(*Server)
@@ -39,10 +41,17 @@ func Middlewares(middlewares ...Middleware) ServerOption {
 	}
 }
 
-// TLSConfig with showInfo config.
+// ShowInfo with showInfo config.
 func ShowInfo(isShow bool) ServerOption {
 	return func(s *Server) {
 		s.showInfo = isShow
+	}
+}
+
+// HTMLTemplate with htmlTemplate config.
+func HTMLTemplate(t *templ.HTMLTemplate) ServerOption {
+	return func(s *Server) {
+		s.htmlTempl = t
 	}
 }
 
@@ -54,7 +63,8 @@ type Server struct {
 	address  string
 	tlsConf  *tls.Config
 
-	showInfo bool
+	showInfo  bool
+	htmlTempl *templ.HTMLTemplate
 }
 
 func New(opts ...ServerOption) *Server {
@@ -62,7 +72,8 @@ func New(opts ...ServerOption) *Server {
 		network: "tcp",
 		address: ":80",
 
-		showInfo: false,
+		showInfo:  false,
+		htmlTempl: templ.New(),
 	}
 	server.Router = NewRouter(server)
 	for _, o := range opts {
@@ -73,6 +84,21 @@ func New(opts ...ServerOption) *Server {
 		Handler:   server.mux,
 	}
 	return server
+}
+
+// Template returns server.htmlTempl.
+func (s *Server) Template() *template.Template {
+	return s.htmlTempl.Templ
+}
+
+// LoadHTMLFiles loads a slice of HTML files.
+func (s *Server) LoadHTMLGlob(pattern string) {
+	s.htmlTempl.LoadHTMLGlob(pattern)
+}
+
+// LoadHTMLGlob loads HTML files identified by glob pattern.
+func (s *Server) LoadHTMLFiles(files ...string) {
+	s.htmlTempl.LoadHTMLFiles(files...)
 }
 
 func (s *Server) Run(ctx context.Context) error {

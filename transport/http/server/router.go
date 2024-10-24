@@ -90,7 +90,7 @@ func (r *Router) Handle(method, path string, handler HandlerFunc, middlewares ..
 	c := chain(middlewares...)(handler)
 
 	entrance := http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
-		ctx := newContext(req, resp)
+		ctx := newContext(req, resp, r.server)
 		ctx.fullPath = fullPath
 		c(ctx)
 	})
@@ -142,17 +142,17 @@ func (r *Router) ANY(path string, handler HandlerFunc, middlewares ...Middleware
 
 // StaticFile registers a single route in order to serve a single file of the local filesystem.
 func (r *Router) StaticFile(path, filePath string) {
-	r.staticFileHandler(path, func(c *Context) (any, error) {
+	r.staticFileHandler(path, func(c *Context) error {
 		c.File(filePath)
-		return nil, nil
+		return nil
 	})
 }
 
 // StaticFileFS works just like `StaticFile` but a custom `http.FileSystem` can be used instead..
 func (r *Router) StaticFileFS(path, filePath string, fs http.FileSystem) {
-	r.staticFileHandler(path, func(c *Context) (any, error) {
+	r.staticFileHandler(path, func(c *Context) error {
 		c.FileFromFS(filePath, fs)
-		return nil, nil
+		return nil
 	})
 }
 
@@ -186,7 +186,7 @@ func (r *Router) createStaticHandler(path string, fs http.FileSystem) HandlerFun
 	absolutePath := r.joinPaths(r.basePath, path)
 	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
 
-	return func(c *Context) (any, error) {
+	return func(c *Context) error {
 		if _, noListing := fs.(*OnlyFilesFS); noListing {
 			c.Response.WriteHeader(http.StatusNotFound)
 		}
@@ -196,12 +196,12 @@ func (r *Router) createStaticHandler(path string, fs http.FileSystem) HandlerFun
 		f, err := fs.Open(file)
 		if err != nil {
 			c.Response.WriteHeader(http.StatusNotFound)
-			return nil, err
+			return err
 		}
 		f.Close()
 
 		fileServer.ServeHTTP(c.Response, c.Request)
-		return nil, nil
+		return nil
 	}
 }
 

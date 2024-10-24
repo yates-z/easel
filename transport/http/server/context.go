@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-type HandlerFunc func(*Context) (any, error)
+type HandlerFunc func(*Context) error
 
 var _ context.Context = (*Context)(nil)
 
@@ -21,16 +21,18 @@ type Context struct {
 	Request  *http.Request
 	Response http.ResponseWriter
 
+	server   *Server
 	fullPath string
 	// SameSite allows a server to define a cookie attribute making it impossible for
 	// the browser to send this cookie along with cross-site requests.
 	sameSite http.SameSite
 }
 
-func newContext(req *http.Request, resp http.ResponseWriter) *Context {
+func newContext(req *http.Request, resp http.ResponseWriter, s *Server) *Context {
 	return &Context{
 		Request:  req,
 		Response: resp,
+		server:   s,
 	}
 }
 
@@ -52,10 +54,6 @@ func (c *Context) Err() error {
 func (c *Context) Value(key any) any {
 	ctx := c.Request.Context()
 	return ctx.Value(key)
-}
-
-func (c *Context) Redirect(url string) {
-	http.Redirect(c.Response, c.Request, url, http.StatusMovedPermanently)
 }
 
 func (c *Context) Param(key string) string {
@@ -116,7 +114,7 @@ func (c *Context) RemoteIP() string {
 /********* RESPONSE ********/
 /***************************/
 
-// Status sets the HTTP response code.
+// SetStatus sets the HTTP response code.
 func (c *Context) SetStatus(code int) {
 	c.Response.WriteHeader(code)
 }
@@ -169,10 +167,21 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
 	})
 }
 
+// GetCookie returns the named cookie provided in the request or
+// ErrNoCookie if not found.
+func (c *Context) GetCookie(name string) (string, error) {
+	cookie, err := c.Request.Cookie(name)
+	if err != nil {
+		return "", err
+	}
+	val, _ := url.QueryUnescape(cookie.Value)
+	return val, nil
+}
+
+// String writes the given string into the response body.
 func (c *Context) String(code int, text string) error {
 	c.SetStatus(code)
-
-	c.Response.Header().Set("Content-Type", "text/plain")
+	setContentType(c.Response, []string{"text/plain; charset=utf-8"})
 
 	_, err := c.Response.Write([]byte(text))
 	if err != nil {
@@ -181,13 +190,10 @@ func (c *Context) String(code int, text string) error {
 	return nil
 }
 
+// JSON serializes the given struct as JSON into the response body.
 func (c *Context) JSON(code int, obj any) error {
 	c.SetStatus(code)
-
-	header := c.Response.Header()
-	if val := header["Content-Type"]; len(val) == 0 {
-		header["Content-Type"] = []string{"application/json; charset=utf-8"}
-	}
+	setContentType(c.Response, []string{"application/json; charset=utf-8"})
 
 	jsonBytes, err := json.Marshal(obj)
 	if err != nil {
@@ -195,4 +201,27 @@ func (c *Context) JSON(code int, obj any) error {
 	}
 	_, err = c.Response.Write(jsonBytes)
 	return err
+}
+
+// HTML renders the HTTP template specified by its file name.
+func (c *Context) HTML(code int, name string, data any) error {
+	c.SetStatus(code)
+	setContentType(c.Response, []string{"text/html; charset=utf-8"})
+	if name == "" {
+		return c.server.Template().Execute(c.Response, data)
+	}
+	return c.server.Template().ExecuteTemplate(c.Response, name, data)
+}
+
+// Redirect returns an HTTP redirect to the specific location.
+func (c *Context) Redirect(url string) {
+	http.Redirect(c.Response, c.Request, url, http.StatusMovedPermanently)
+}
+
+// setContentType writes ContentType.
+func setContentType(r http.ResponseWriter, contentType []string) {
+	header := r.Header()
+	if val := header["Content-Type"]; len(val) == 0 {
+		header["Content-Type"] = contentType
+	}
 }

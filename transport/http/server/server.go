@@ -42,9 +42,9 @@ func Middlewares(middlewares ...Middleware) ServerOption {
 }
 
 // ShowInfo with showInfo config.
-func ShowInfo(isShow bool) ServerOption {
+func ShowInfo() ServerOption {
 	return func(s *Server) {
-		s.showInfo = isShow
+		s.showInfo = true
 	}
 }
 
@@ -63,8 +63,9 @@ type Server struct {
 	address  string
 	tlsConf  *tls.Config
 
-	showInfo  bool
-	htmlTempl *templ.HTMLTemplate
+	showInfo     bool
+	htmlTempl    *templ.HTMLTemplate
+	errorHandler func(ctx *Context, err error)
 }
 
 func New(opts ...ServerOption) *Server {
@@ -76,6 +77,9 @@ func New(opts ...ServerOption) *Server {
 		htmlTempl: templ.New(),
 	}
 	server.Router = NewRouter(server)
+	server.errorHandler = func(ctx *Context, err error) {
+		http.Error(ctx.Response, err.Error(), http.StatusBadRequest)
+	}
 	for _, o := range opts {
 		o(server)
 	}
@@ -88,20 +92,25 @@ func New(opts ...ServerOption) *Server {
 
 // Template returns server.htmlTempl.
 func (s *Server) Template() *template.Template {
-	return s.htmlTempl.Templ
+	return s.htmlTempl.Tpl
 }
 
-// LoadHTMLFiles loads a slice of HTML files.
+// LoadHTMLGlob loads a slice of HTML files.
 func (s *Server) LoadHTMLGlob(pattern string) {
 	s.htmlTempl.LoadHTMLGlob(pattern)
 }
 
-// LoadHTMLGlob loads HTML files identified by glob pattern.
+// LoadHTMLFiles loads HTML files identified by glob pattern.
 func (s *Server) LoadHTMLFiles(files ...string) {
 	s.htmlTempl.LoadHTMLFiles(files...)
 }
 
-func (s *Server) Run(ctx context.Context) error {
+// SetErrorHandler sets custom http error handler.
+func (s *Server) SetErrorHandler(f func(*Context, error)) {
+	s.errorHandler = f
+}
+
+func (s *Server) Run() error {
 	if s.listener == nil {
 		listener, err := net.Listen(s.network, s.address)
 		if err != nil {
@@ -116,7 +125,7 @@ func (s *Server) Run(ctx context.Context) error {
 	return s.Serve(s.listener)
 }
 
-func (s *Server) MustRun(ctx context.Context) {
+func (s *Server) MustRun() {
 	if s.listener == nil {
 		listener, err := net.Listen(s.network, s.address)
 		if err != nil {
@@ -131,8 +140,15 @@ func (s *Server) MustRun(ctx context.Context) {
 	logger.Fatal(s.Serve(s.listener))
 }
 
-// Stop stop the HTTP server.
+// Stop the HTTP server.
 func (s *Server) Stop(ctx context.Context) error {
-	logger.Info("[HTTP] server stopping")
-	return s.Shutdown(ctx)
+	logger.Info("[HTTP] server is stopping")
+	return s.server.Stop(ctx)
+}
+
+// Shutdown gracefully shuts down the server without interrupting any
+// // active connections..
+func (s *Server) Shutdown(ctx context.Context) error {
+	logger.Info("[HTTP] server is stopping")
+	return s.server.Shutdown(ctx)
 }

@@ -3,11 +3,16 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
+	"github.com/yates-z/easel/logger"
+	"google.golang.org/protobuf/proto"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -23,6 +28,7 @@ type Context struct {
 
 	server   *Server
 	fullPath string
+	params   []string
 	// SameSite allows a server to define a cookie attribute making it impossible for
 	// the browser to send this cookie along with cross-site requests.
 	sameSite http.SameSite
@@ -35,6 +41,10 @@ func newContext(req *http.Request, resp http.ResponseWriter, s *Server) *Context
 		server:   s,
 	}
 }
+
+/********************************************/
+/********* implement context.Context ********/
+/********************************************/
 
 func (c *Context) Deadline() (deadline time.Time, ok bool) {
 	ctx := c.Request.Context()
@@ -56,28 +66,16 @@ func (c *Context) Value(key any) any {
 	return ctx.Value(key)
 }
 
+/***************************/
+/********* REQUEST ********/
+/***************************/
+
 func (c *Context) Param(key string) string {
 	return c.Request.PathValue(key)
 }
 
 func (c *Context) FullPath() string {
 	return c.fullPath
-}
-
-// File writes the specified file into the body stream in an efficient way.
-func (c *Context) File(filepath string) {
-	http.ServeFile(c.Response, c.Request, filepath)
-}
-
-// FileFromFS writes the specified file from http.FileSystem into the body stream in an efficient way.
-func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
-	defer func(old string) {
-		c.Request.URL.Path = old
-	}(c.Request.URL.Path)
-
-	c.Request.URL.Path = filepath
-
-	http.FileServer(fs).ServeHTTP(c.Response, c.Request)
 }
 
 // ContentType returns the Content-Type header of the request.
@@ -108,6 +106,39 @@ func (c *Context) RemoteIP() string {
 		return ""
 	}
 	return ip
+}
+
+// HasBody checks if the http request has a request body.
+func (c *Context) HasBody() bool {
+	if slices.Contains([]string{http.MethodGet, http.MethodDelete, http.MethodHead}, c.Request.Method) {
+		return false
+	}
+	if c.Request.ContentLength == 0 {
+		return false
+	}
+	if c.Request.Body == nil {
+		return false
+	}
+	return true
+}
+
+// HasParams checks if the path has parameters.
+func (c *Context) HasParams() bool {
+	if strings.HasSuffix(c.FullPath(), "/") {
+		logger.Warnf("Path %s should not end with \"/\"", c.FullPath())
+	}
+	pattern := regexp.MustCompile(`(?i){([a-z.0-9_\s]*)=?([^{}]*)}`)
+	matches := pattern.FindAllStringSubmatch(c.FullPath(), -1)
+	res := make(map[string]*string, len(matches))
+	for _, m := range matches {
+		name := strings.TrimSpace(m[1])
+		if len(name) > 1 && len(m[2]) > 0 {
+			res[name] = &m[2]
+		} else {
+			res[name] = nil
+		}
+	}
+	return len(res) > 0
 }
 
 /***************************/
@@ -180,8 +211,8 @@ func (c *Context) GetCookie(name string) (string, error) {
 
 // String writes the given string into the response body.
 func (c *Context) String(code int, text string) error {
+	c.SetContentType([]string{"text/plain; charset=utf-8"})
 	c.SetStatus(code)
-	setContentType(c.Response, []string{"text/plain; charset=utf-8"})
 
 	_, err := c.Response.Write([]byte(text))
 	if err != nil {
@@ -192,8 +223,8 @@ func (c *Context) String(code int, text string) error {
 
 // JSON serializes the given struct as JSON into the response body.
 func (c *Context) JSON(code int, obj any) error {
+	c.SetContentType([]string{"application/json; charset=utf-8"})
 	c.SetStatus(code)
-	setContentType(c.Response, []string{"application/json; charset=utf-8"})
 
 	jsonBytes, err := json.Marshal(obj)
 	if err != nil {
@@ -205,12 +236,34 @@ func (c *Context) JSON(code int, obj any) error {
 
 // HTML renders the HTTP template specified by its file name.
 func (c *Context) HTML(code int, name string, data any) error {
+	c.SetContentType([]string{"text/html; charset=utf-8"})
 	c.SetStatus(code)
-	setContentType(c.Response, []string{"text/html; charset=utf-8"})
 	if name == "" {
 		return c.server.Template().Execute(c.Response, data)
 	}
 	return c.server.Template().ExecuteTemplate(c.Response, name, data)
+}
+
+// XML renders the HTTP template specified by its file name.
+func (c *Context) XML(code int, data any) error {
+	c.SetContentType([]string{"application/xml; charset=utf-8"})
+	c.SetStatus(code)
+	return xml.NewEncoder(c.Response).Encode(data)
+}
+
+// Proto serializes the given struct as ProtoBuf into the response body.
+func (c *Context) Proto(code int, data any) error {
+	c.SetContentType([]string{"application/x-protobuf"})
+	c.SetStatus(code)
+	if value, ok := data.(proto.Message); ok {
+		bytes, err := proto.Marshal(value)
+		if err != nil {
+			return err
+		}
+		_, err = c.Response.Write(bytes)
+		return err
+	}
+	return errors.New("not a proto message")
 }
 
 // Redirect returns an HTTP redirect to the specific location.
@@ -218,9 +271,25 @@ func (c *Context) Redirect(url string) {
 	http.Redirect(c.Response, c.Request, url, http.StatusMovedPermanently)
 }
 
-// setContentType writes ContentType.
-func setContentType(r http.ResponseWriter, contentType []string) {
-	header := r.Header()
+// File writes the specified file into the body stream in an efficient way.
+func (c *Context) File(filepath string) {
+	http.ServeFile(c.Response, c.Request, filepath)
+}
+
+// FileFromFS writes the specified file from http.FileSystem into the body stream in an efficient way.
+func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
+	defer func(old string) {
+		c.Request.URL.Path = old
+	}(c.Request.URL.Path)
+
+	c.Request.URL.Path = filepath
+
+	http.FileServer(fs).ServeHTTP(c.Response, c.Request)
+}
+
+// SetContentType writes ContentType.
+func (c *Context) SetContentType(contentType []string) {
+	header := c.Response.Header()
 	if val := header["Content-Type"]; len(val) == 0 {
 		header["Content-Type"] = contentType
 	}

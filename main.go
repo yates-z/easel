@@ -12,14 +12,14 @@ type R struct {
 	Data string
 }
 
-func Hello(ctx *server.Context) (interface{}, error) {
+func Hello(ctx *server.Context) error {
 	fmt.Println("Hello World!")
-	return ctx.JSON(http.StatusOK, R{200, "Hello World!"}), nil
+	return ctx.JSON(http.StatusOK, R{200, "Hello World!"})
 }
 
 func main() {
 
-	s := server.New(server.Address("localhost:8000"), server.ShowInfo(true))
+	s := server.New(server.Address("localhost:8000"), server.ShowInfo())
 	s.GET("/hello", Hello)
 	s.MustRun(context.Background())
 }

@@ -11,7 +11,7 @@ func Delims(left, right string) Option {
 	}
 }
 
-// Delims with html template delims config.
+// FuncMap with html template delims config.
 func FuncMap(fm template.FuncMap) Option {
 	return func(s *HTMLTemplate) {
 		s.FuncMap = fm
@@ -19,7 +19,7 @@ func FuncMap(fm template.FuncMap) Option {
 }
 
 type HTMLTemplate struct {
-	Templ   *template.Template
+	Tpl     *template.Template
 	Delims  []string
 	FuncMap template.FuncMap
 }
@@ -33,15 +33,15 @@ func New(opts ...Option) *HTMLTemplate {
 }
 
 // LoadHTMLGlob loads HTML files identified by glob pattern
-func (templ *HTMLTemplate) LoadHTMLGlob(pattern string) {
-	templ.Templ = template.Must(
-		template.New("").Delims(templ.Delims[0], templ.Delims[1]).Funcs(templ.FuncMap).ParseGlob(pattern),
+func (tpl *HTMLTemplate) LoadHTMLGlob(pattern string) {
+	tpl.Tpl = template.Must(
+		template.New("").Delims(tpl.Delims[0], tpl.Delims[1]).Funcs(tpl.FuncMap).ParseGlob(pattern),
 	)
 }
 
 // LoadHTMLFiles loads a slice of HTML files
-func (templ *HTMLTemplate) LoadHTMLFiles(files ...string) {
-	templ.Templ = template.Must(
-		template.New("").Delims(templ.Delims[0], templ.Delims[1]).Funcs(templ.FuncMap).ParseFiles(files...),
+func (tpl *HTMLTemplate) LoadHTMLFiles(files ...string) {
+	tpl.Tpl = template.Must(
+		template.New("").Delims(tpl.Delims[0], tpl.Delims[1]).Funcs(tpl.FuncMap).ParseFiles(files...),
 	)
 }

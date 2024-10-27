@@ -92,7 +92,10 @@ func (r *Router) Handle(method, path string, handler HandlerFunc, middlewares ..
 	entrance := http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 		ctx := newContext(req, resp, r.server)
 		ctx.fullPath = fullPath
-		c(ctx)
+		err := c(ctx)
+		if err != nil {
+			r.server.errorHandler(ctx, err)
+		}
 	})
 
 	r.mux.Handle(pattern, entrance)

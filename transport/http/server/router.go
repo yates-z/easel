@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"github.com/yates-z/easel/core/pool"
 	"net/http"
 	pathlib "path"
 	"regexp"
@@ -51,12 +52,18 @@ type Router struct {
 	server      *Server
 	mux         *http.ServeMux
 	middlewares []Middleware
+	ctxPool     *pool.Pool[*Context]
 }
 
 func NewRouter(s *Server) *Router {
 	r := &Router{
 		server: s,
 		mux:    http.NewServeMux(),
+		ctxPool: pool.New(func() *Context {
+			return &Context{
+				server: s,
+			}
+		}),
 	}
 	return r
 }
@@ -90,11 +97,14 @@ func (r *Router) Handle(method, path string, handler HandlerFunc, middlewares ..
 	c := chain(middlewares...)(handler)
 
 	entrance := http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
-		ctx := newContext(req, resp, r.server)
+		ctx := r.ctxPool.Get()
+		ctx.init(req, resp)
 		ctx.fullPath = fullPath
 		if err := c(ctx); err != nil {
 			r.server.errorHandler(ctx, err)
 		}
+		ctx.reset()
+		r.ctxPool.Put(ctx)
 	})
 
 	r.mux.Handle(pattern, entrance)

@@ -28,7 +28,6 @@ type Context struct {
 
 	server   *Server
 	fullPath string
-	params   []string
 	// SameSite allows a server to define a cookie attribute making it impossible for
 	// the browser to send this cookie along with cross-site requests.
 	sameSite http.SameSite
@@ -40,6 +39,18 @@ func newContext(req *http.Request, resp http.ResponseWriter, s *Server) *Context
 		Response: resp,
 		server:   s,
 	}
+}
+
+func (c *Context) init(req *http.Request, resp http.ResponseWriter) {
+	c.Request = req
+	c.Response = resp
+}
+
+func (c *Context) reset() {
+	c.Request = nil
+	c.Response = nil
+	c.fullPath = ""
+	c.sameSite = 0
 }
 
 /********************************************/

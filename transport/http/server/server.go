@@ -3,12 +3,11 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"github.com/yates-z/easel/logger"
+	templ "github.com/yates-z/easel/transport/http/server/template"
 	"html/template"
 	"net"
 	"net/http"
-
-	"github.com/yates-z/easel/logger"
-	templ "github.com/yates-z/easel/transport/http/server/template"
 )
 
 type ServerOption func(*Server)

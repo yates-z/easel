@@ -92,8 +92,7 @@ func (r *Router) Handle(method, path string, handler HandlerFunc, middlewares ..
 	entrance := http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 		ctx := newContext(req, resp, r.server)
 		ctx.fullPath = fullPath
-		err := c(ctx)
-		if err != nil {
+		if err := c(ctx); err != nil {
 			r.server.errorHandler(ctx, err)
 		}
 	})

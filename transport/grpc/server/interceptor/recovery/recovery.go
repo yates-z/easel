@@ -1,7 +1,9 @@
 package recovery
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"github.com/yates-z/easel/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -37,9 +39,7 @@ func UnaryServerInterceptor(opts ...Option) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (_ any, err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				stack := make([]byte, 64<<10)
-				n := runtime.Stack(stack, false)
-				stack = stack[:n]
+				stack := getStack(4)
 				logger.Context(ctx).Errorf("%v: %+v\n%s\n", r, req, stack)
 				err = op.recoveryHandler(ctx, r)
 			}
@@ -72,4 +72,20 @@ func StreamServerInterceptor(opts ...Option) grpc.StreamServerInterceptor {
 
 		return handler(srv, stream)
 	}
+}
+
+func getStack(skip int) []byte {
+	buf := new(bytes.Buffer)
+
+	pc := make([]uintptr, 10)
+	n := runtime.Callers(skip, pc)
+	frames := runtime.CallersFrames(pc[:n])
+	for {
+		frame, more := frames.Next()
+		_, _ = fmt.Fprintf(buf, "%s:%d (0x%x)\n\t%s\n", frame.File, frame.Line, frame.PC, frame.Function)
+		if !more {
+			break
+		}
+	}
+	return buf.Bytes()
 }

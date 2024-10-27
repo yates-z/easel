@@ -26,7 +26,7 @@ func (s *Server2) SayHello(ctx context.Context, in *api.HelloRequest) (*api.Hell
 	//	}
 	//}
 	time.Sleep(3 * time.Second)
-	//panic("implement me")
+	panic("implement me")
 	return &api.HelloResponse{Replay: "hello"}, nil
 }
 
@@ -35,10 +35,10 @@ func TestServeGrpc(t *testing.T) {
 		server.Address("0.0.0.0:9100"),
 		server.Compressor(zlib.New()),
 		server.UnaryInterceptor(
-			recovery.UnaryServerInterceptor(),
-			timeout.UnaryServerInterceptor(5*time.Second),
 			//ratelimit.UnaryServerInterceptor(ratelimit.NewTokenBucket(time.Second, 1, 10)),
 			ratelimit.UnaryServerInterceptor(ratelimit.NewLeakyBucket(1, 2)),
+			timeout.UnaryServerInterceptor(5*time.Second),
+			recovery.UnaryServerInterceptor(),
 		),
 		server.StreamInterceptor(recovery.StreamServerInterceptor()),
 		server.AllowReflection(true),

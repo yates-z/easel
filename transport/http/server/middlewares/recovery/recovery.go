@@ -36,7 +36,7 @@ func Middleware(opts ...Option) server.Middleware {
 			defer func() {
 				if r := recover(); r != nil {
 					stack := getStack(4)
-					logger.Context(ctx).Errorf("%v: %+v\n%s\n", r, ctx.Request, stack)
+					logger.Context(ctx).Errorf("%v: %+v\n%s\n", r, ctx.Request.URL.String(), stack)
 					err = op.handler(ctx, r)
 				}
 			}()

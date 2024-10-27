@@ -24,7 +24,7 @@ var _ context.Context = (*Context)(nil)
 // Context is an HTTP request Context. It defines core functions sets of this http.server.
 type Context struct {
 	Request  *http.Request
-	Response http.ResponseWriter
+	Response *response
 
 	server   *Server
 	fullPath string
@@ -36,19 +36,19 @@ type Context struct {
 func newContext(req *http.Request, resp http.ResponseWriter, s *Server) *Context {
 	return &Context{
 		Request:  req,
-		Response: resp,
+		Response: &response{ResponseWriter: resp},
 		server:   s,
 	}
 }
 
 func (c *Context) init(req *http.Request, resp http.ResponseWriter) {
 	c.Request = req
-	c.Response = resp
+	c.Response = &response{ResponseWriter: resp, statusCode: http.StatusOK}
 }
 
 func (c *Context) reset() {
 	c.Request = nil
-	c.Response = nil
+	c.Response.reset(nil)
 	c.fullPath = ""
 	c.sameSite = 0
 }

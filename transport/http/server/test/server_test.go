@@ -2,9 +2,11 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"github.com/yates-z/easel/transport/grpc/server/test/api"
 	"github.com/yates-z/easel/transport/http/server"
 	"github.com/yates-z/easel/transport/http/server/adapter"
+	"github.com/yates-z/easel/transport/http/server/middlewares/logging"
 	"github.com/yates-z/easel/transport/http/server/middlewares/recovery"
 	"net/http"
 	"testing"
@@ -19,7 +21,8 @@ func (s *HelloService) SayHello(ctx context.Context, in *api.HelloRequest) (*api
 }
 
 func Hello(ctx *server.Context) error {
-	panic("pppanic")
+	//time.Sleep(3 * time.Second)
+	fmt.Println("hello world")
 	return ctx.JSON(http.StatusOK, map[string]string{"hello": ctx.Param("name")})
 }
 
@@ -27,7 +30,7 @@ func TestServer(t *testing.T) {
 	s := server.New(
 		server.Address(":8000"),
 		server.ShowInfo(),
-		server.Middlewares(recovery.Middleware()),
+		server.Middlewares(recovery.Middleware(), logging.Middleware()),
 	)
 	service := &HelloService{}
 	s.GET("/hello/{name}", Hello)

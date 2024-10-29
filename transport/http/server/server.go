@@ -3,11 +3,16 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
+	"github.com/yates-z/easel/core/pool"
 	"github.com/yates-z/easel/logger"
 	templ "github.com/yates-z/easel/transport/http/server/template"
 	"html/template"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
+	"time"
 )
 
 type ServerOption func(*Server)
@@ -62,6 +67,8 @@ type Server struct {
 	address  string
 	tlsConf  *tls.Config
 
+	ctxPool      *pool.Pool[*Context]
+	middlewares  []Middleware
 	showInfo     bool
 	htmlTempl    *templ.HTMLTemplate
 	errorHandler func(ctx *Context, err error)
@@ -76,17 +83,41 @@ func New(opts ...ServerOption) *Server {
 		htmlTempl: templ.New(),
 	}
 	server.Router = NewRouter(server)
+	server.ctxPool = pool.New(func() *Context {
+		return newContext(nil, server)
+	})
 	server.errorHandler = func(ctx *Context, err error) {
 		http.Error(ctx.Response, err.Error(), http.StatusBadRequest)
 	}
 	for _, o := range opts {
 		o(server)
 	}
+
+	handler := chain(server.middlewares...)(func(ctx *Context) error {
+		server.mux.ServeHTTP(ctx.Response, ctx.Request)
+		return nil
+	})
+
 	server.Server = &http.Server{
 		TLSConfig: server.tlsConf,
-		Handler:   server.mux,
+		Handler: http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+			ctx := server.ctxPool.Get()
+			ctx.WithBaseContext(req.Context())
+			req = req.Clone(ctx)
+			ctx.init(req, resp)
+			if err := handler(ctx); err != nil {
+				server.errorHandler(ctx, err)
+			}
+			ctx.reset()
+			server.ctxPool.Put(ctx)
+		}),
 	}
 	return server
+}
+
+func (s *Server) Use(middlewares ...Middleware) *Server {
+	s.middlewares = append(s.middlewares, middlewares...)
+	return s
 }
 
 // Template returns server.htmlTempl.
@@ -134,20 +165,42 @@ func (s *Server) MustRun() {
 		logger.Infof("[http] server listening on: %s", s.listener.Addr().String())
 	}
 	if s.tlsConf != nil {
-		logger.Fatal(s.ServeTLS(s.listener, "", ""))
+		if err := s.ServeTLS(s.listener, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Fatal(err)
+		}
+		return
 	}
-	logger.Fatal(s.Serve(s.listener))
+	if err := s.Serve(s.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Fatal(err)
+	}
 }
 
-// Stop the HTTP server.
-func (s *Server) Stop(ctx context.Context) error {
-	logger.Info("[HTTP] server is stopping")
-	return s.server.Stop(ctx)
+// Start the HTTP server.
+func (s *Server) Start(ctx context.Context) {
+	go s.MustRun()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+	<-stop
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := s.Shutdown(ctx); err != nil {
+		logger.Fatalf("Server Shutdown error: %v", err)
+	}
+
+	logger.Info("Server gracefully stopped")
+}
+
+// Close immediately closes all active net.
+func (s *Server) Close() error {
+	logger.Info("[HTTP] server is closing")
+	return s.Server.Close()
 }
 
 // Shutdown gracefully shuts down the server without interrupting any
 // // active connections..
 func (s *Server) Shutdown(ctx context.Context) error {
 	logger.Info("[HTTP] server is stopping")
-	return s.server.Shutdown(ctx)
+	return s.Server.Shutdown(ctx)
 }

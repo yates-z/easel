@@ -54,15 +54,24 @@ type logger struct {
 	entityPool *pool.Pool[*logEntity]
 }
 
+func convertMsg(msg any) string {
+	if v, ok := msg.(string); ok {
+		return v
+	} else if e, ok := msg.(error); ok {
+		return e.Error()
+	} else if str, ok := msg.(fmt.Stringer); ok {
+		return str.String()
+	}
+	return ""
+}
+
 func (l *logger) Log(level LogLevel, args ...any) {
 	if !l.level.Enabled(level) {
 		return
 	}
 	var msg string
 	if len(args) == 1 {
-		if str, ok := args[0].(string); ok {
-			msg = str
-		}
+		msg = convertMsg(args[0])
 	} else {
 		msg = fmt.Sprint(args...)
 	}

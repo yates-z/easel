@@ -9,11 +9,19 @@ import (
 	"testing"
 )
 
+type stringer struct {
+}
+
+func (s stringer) String() string {
+	return "hello world"
+}
+
 // BenchmarkDefaultLog-10
 // 77700             15293 ns/op               5 B/op          0 allocs/op
 // 74779             15248 ns/op               5 B/op          0 allocs/op
 // 75206             15215 ns/op               5 B/op          0 allocs/op
 func BenchmarkDefault(b *testing.B) {
+	msg := &stringer{}
 	log := logger.NewLogger(
 		logger.WithLevel(logger.InfoLevel),
 		logger.WithBackends(logger.AnyLevel, backend.OSBackend().Build()),
@@ -30,16 +38,17 @@ func BenchmarkDefault(b *testing.B) {
 	)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		//log.Info("Hello World", n)
-		log.Infos("hello world",
-			logger.Group("TEST",
-				logger.F("test", "6"),
-				logger.F("test", "7"),
-				logger.F("test", "7"),
-			),
-			logger.F("test", strconv.Itoa(n)),
-		)
+		log.Info(msg, n, n)
+		//log.Infos("hello world",
+		//	logger.Group("TEST",
+		//		logger.F("test", "6"),
+		//		logger.F("test", "7"),
+		//		logger.F("test", "7"),
+		//	),
+		//	logger.F("test", strconv.Itoa(n)),
+		//)
 	}
+	b.ReportAllocs()
 }
 
 // BenchmarkSlog-10    	  319574	      4160 ns/op

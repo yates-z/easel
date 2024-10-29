@@ -21,5 +21,5 @@ func main() {
 
 	s := server.New(server.Address("localhost:8000"), server.ShowInfo())
 	s.GET("/hello", Hello)
-	s.MustRun(context.Background())
+	s.Start(context.Background())
 }

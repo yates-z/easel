@@ -26,6 +26,8 @@ type Context struct {
 	Request  *http.Request
 	Response *response
 
+	ctx context.Context
+
 	server   *Server
 	fullPath string
 	// SameSite allows a server to define a cookie attribute making it impossible for
@@ -33,12 +35,18 @@ type Context struct {
 	sameSite http.SameSite
 }
 
-func newContext(req *http.Request, resp http.ResponseWriter, s *Server) *Context {
+func newContext(ctx context.Context, s *Server) *Context {
 	return &Context{
-		Request:  req,
-		Response: &response{ResponseWriter: resp},
-		server:   s,
+		ctx:    ctx,
+		server: s,
 	}
+}
+
+func (c *Context) WithBaseContext(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	c.ctx = ctx
 }
 
 func (c *Context) init(req *http.Request, resp http.ResponseWriter) {
@@ -49,6 +57,7 @@ func (c *Context) init(req *http.Request, resp http.ResponseWriter) {
 func (c *Context) reset() {
 	c.Request = nil
 	c.Response.reset(nil)
+	c.ctx = nil
 	c.fullPath = ""
 	c.sameSite = 0
 }
@@ -58,23 +67,19 @@ func (c *Context) reset() {
 /********************************************/
 
 func (c *Context) Deadline() (deadline time.Time, ok bool) {
-	ctx := c.Request.Context()
-	return ctx.Deadline()
+	return c.ctx.Deadline()
 }
 
 func (c *Context) Done() <-chan struct{} {
-	ctx := c.Request.Context()
-	return ctx.Done()
+	return c.ctx.Done()
 }
 
 func (c *Context) Err() error {
-	ctx := c.Request.Context()
-	return ctx.Err()
+	return c.ctx.Err()
 }
 
 func (c *Context) Value(key any) any {
-	ctx := c.Request.Context()
-	return ctx.Value(key)
+	return c.ctx.Value(key)
 }
 
 /***************************/

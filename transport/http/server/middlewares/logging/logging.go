@@ -35,7 +35,7 @@ func Middleware() server.Middleware {
 			builder := []logger.FieldBuilder{
 				logger.F("method", ctx.Request.Method),
 				codeField,
-				logger.F("path", ctx.FullPath()),
+				logger.F("path", ctx.Request.URL.Path),
 				logger.F("query", ctx.Request.URL.RawQuery),
 				logger.F("duration", time.Since(startTime).String()),
 			}

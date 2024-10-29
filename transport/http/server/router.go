@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"github.com/yates-z/easel/core/pool"
 	"net/http"
 	pathlib "path"
 	"regexp"
@@ -27,8 +26,6 @@ type IRouter interface {
 }
 
 type IRoute interface {
-	Use(...Middleware) IRouter
-
 	Handle(method, path string, handler HandlerFunc, middlewares ...Middleware)
 	ANY(path string, handler HandlerFunc, middlewares ...Middleware)
 	GET(path string, handler HandlerFunc, middlewares ...Middleware)
@@ -52,24 +49,13 @@ type Router struct {
 	server      *Server
 	mux         *http.ServeMux
 	middlewares []Middleware
-	ctxPool     *pool.Pool[*Context]
 }
 
 func NewRouter(s *Server) *Router {
 	r := &Router{
 		server: s,
 		mux:    http.NewServeMux(),
-		ctxPool: pool.New(func() *Context {
-			return &Context{
-				server: s,
-			}
-		}),
 	}
-	return r
-}
-
-func (r *Router) Use(middlewares ...Middleware) IRouter {
-	r.middlewares = append(r.middlewares, middlewares...)
 	return r
 }
 
@@ -85,26 +71,15 @@ func (r *Router) Handle(method, path string, handler HandlerFunc, middlewares ..
 		logger.Info(pattern)
 	}
 
-	middlewares = append(r.middlewares, middlewares...)
-	chain := func(middlewares ...Middleware) Middleware {
-		return func(next HandlerFunc) HandlerFunc {
-			for i := len(middlewares) - 1; i >= 0; i-- {
-				next = middlewares[i](next)
-			}
-			return next
-		}
-	}
-	c := chain(middlewares...)(handler)
+	middlewares = append(middlewares, r.middlewares...)
+	_handler := chain(middlewares...)(handler)
 
 	entrance := http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
-		ctx := r.ctxPool.Get()
-		ctx.init(req, resp)
+		ctx := req.Context().(*Context)
 		ctx.fullPath = fullPath
-		if err := c(ctx); err != nil {
+		if err := _handler(ctx); err != nil {
 			r.server.errorHandler(ctx, err)
 		}
-		ctx.reset()
-		r.ctxPool.Put(ctx)
 	})
 
 	r.mux.Handle(pattern, entrance)
@@ -116,7 +91,7 @@ func (r *Router) Group(path string, middleware ...Middleware) IRoute {
 		basePath:    r.joinPaths(r.basePath, path),
 		server:      r.server,
 		mux:         r.mux,
-		middlewares: middleware,
+		middlewares: append(r.middlewares, middleware...),
 	}
 }
 

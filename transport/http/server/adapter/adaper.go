@@ -3,8 +3,12 @@ package adapter
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
+	"io"
+	"net/url"
+	"regexp"
+	"strings"
+
 	"github.com/yates-z/easel/logger"
 	"github.com/yates-z/easel/transport/grpc/encoding/form"
 	"github.com/yates-z/easel/transport/grpc/encoding/json"
@@ -12,10 +16,6 @@ import (
 	"github.com/yates-z/easel/transport/grpc/encoding/xml"
 	"github.com/yates-z/easel/transport/http/server"
 	"google.golang.org/grpc/encoding"
-	"io"
-	"net/url"
-	"regexp"
-	"strings"
 )
 
 var (
@@ -63,7 +63,7 @@ func GRPC[T1 any, T2 any](f func(context.Context, *T1) (*T2, error)) server.Hand
 func bindBody(ctx *server.Context, v interface{}) error {
 	codec, ok := codecForRequest(ctx, "Content-Type")
 	if !ok {
-		return errors.New(fmt.Sprintf("unregister Content-Type: %s", ctx.GetHeader("Content-Type")))
+		return fmt.Errorf("unregister Content-Type: %s", ctx.GetHeader("Content-Type"))
 	}
 
 	data, err := io.ReadAll(ctx.Request.Body)
@@ -78,7 +78,7 @@ func bindBody(ctx *server.Context, v interface{}) error {
 		return nil
 	}
 	if err = codec.Unmarshal(data, v); err != nil {
-		return errors.New(fmt.Sprintf("body unmarshal %s", err.Error()))
+		return fmt.Errorf("body unmarshal %s", err.Error())
 	}
 	return nil
 }
@@ -112,7 +112,7 @@ func bindParams(ctx *server.Context, v interface{}) error {
 		return nil
 	}
 	params := make(url.Values, len(res))
-	for k, _ := range res {
+	for k := range res {
 		params[k] = []string{ctx.Param(k)}
 	}
 

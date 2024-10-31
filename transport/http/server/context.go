@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	"github.com/yates-z/easel/logger"
-	"google.golang.org/protobuf/proto"
 	"io"
 	"net"
 	"net/http"
@@ -15,6 +13,9 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/yates-z/easel/logger"
+	"google.golang.org/protobuf/proto"
 )
 
 type HandlerFunc func(*Context) error
@@ -35,9 +36,8 @@ type Context struct {
 	sameSite http.SameSite
 }
 
-func newContext(ctx context.Context, s *Server) *Context {
+func newContext(s *Server) *Context {
 	return &Context{
-		ctx:    ctx,
 		server: s,
 	}
 }
@@ -60,6 +60,10 @@ func (c *Context) reset() {
 	c.ctx = nil
 	c.fullPath = ""
 	c.sameSite = 0
+}
+
+func (c *Context) Logger() logger.Logger {
+	return c.server.log
 }
 
 /********************************************/

@@ -1,10 +1,13 @@
 package logger
 
 import (
-	"github.com/yates-z/easel/core/pool"
-	"github.com/yates-z/easel/logger/buffer"
 	"runtime"
+	"strconv"
 	"time"
+
+	"github.com/yates-z/easel/core/pool"
+	"github.com/yates-z/easel/core/variant"
+	"github.com/yates-z/easel/logger/buffer"
 )
 
 type FieldType uint8
@@ -210,10 +213,31 @@ func (f *fastField) Log(buf *buffer.Buffer) {
 	_, _ = buf.Write(f.msg)
 }
 
-func F(key string, value string) FieldBuilder {
+func F(key string, value any) FieldBuilder {
+	f := fastFieldPool.Get()
+	f.Field.setKey(key)
+	f.msg = append(f.msg, variant.New(value).ToString()...)
+	return FieldBuilder{field: f}
+}
+
+func String(key string, value string) FieldBuilder {
 	f := fastFieldPool.Get()
 	f.Field.setKey(key)
 	f.msg = append(f.msg, value...)
+	return FieldBuilder{field: f}
+}
+
+func Int(key string, value int) FieldBuilder {
+	f := fastFieldPool.Get()
+	f.Field.setKey(key)
+	f.msg = append(f.msg, strconv.Itoa(value)...)
+	return FieldBuilder{field: f}
+}
+
+func Float64(key string, value float64) FieldBuilder {
+	f := fastFieldPool.Get()
+	f.Field.setKey(key)
+	f.msg = append(f.msg, strconv.FormatFloat(value, 'g', -1, 64)...)
 	return FieldBuilder{field: f}
 }
 
@@ -386,41 +410,38 @@ type callerField struct {
 }
 
 func (f *callerField) Log(buf *buffer.Buffer) {
-	pcs := make([]uintptr, 1)
-	runtime.Callers(7, pcs[:])
-	if pcs[0] == 0 {
+	pc, file, line, ok := runtime.Caller(8)
+	if !ok {
 		_, _ = buf.WriteString("??? 0")
 	}
-	fs := runtime.CallersFrames(pcs)
-	fs.Next()
-	//if f.shorten {
-	//	short := file
-	//	for i := len(file) - 1; i > 0; i-- {
-	//		if file[i] == '/' {
-	//			short = file[i+1:]
-	//			break
-	//		}
-	//	}
-	//	file = short
-	//}
-	//
-	//var funcName string
-	//if f.showFuncName {
-	//	funcName = runtime.FuncForPC(pc).Name()
-	//	if f.shorten {
-	//		name := funcName
-	//		for i := len(name) - 1; i > 0; i-- {
-	//			if funcName[i] == '.' {
-	//				name = funcName[i+1:]
-	//				break
-	//			}
-	//		}
-	//		funcName = name
-	//	}
-	//	funcName = " " + funcName
-	//}
-	//
-	//_ = fmt.Sprintf("%s %d%s", file, line, funcName)
+	if f.shorten {
+		short := file
+		for i := len(file) - 1; i > 0; i-- {
+			if file[i] == '/' {
+				short = file[i+1:]
+				break
+			}
+		}
+		file = short
+	}
+	_, _ = buf.WriteString(file)
+	_, _ = buf.WriteString(":")
+	buf.WriteInt(int64(line))
+	if f.showFuncName {
+		funcName := runtime.FuncForPC(pc).Name()
+		if f.shorten {
+			name := funcName
+			for i := len(name) - 1; i > 0; i-- {
+				if funcName[i] == '.' {
+					name = funcName[i+1:]
+					break
+				}
+			}
+			funcName = name
+		}
+		_, _ = buf.WriteString(" ")
+		_, _ = buf.WriteString(funcName)
+	}
 
 }
 

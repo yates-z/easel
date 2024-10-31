@@ -6,8 +6,6 @@ import (
 	pathlib "path"
 	"regexp"
 	"strings"
-
-	"github.com/yates-z/easel/logger"
 )
 
 var (
@@ -68,7 +66,7 @@ func (r *Router) Handle(method, path string, handler HandlerFunc, middlewares ..
 	pattern := fmt.Sprintf("%s %s", method, fullPath)
 
 	if r.server.showInfo {
-		logger.Info(pattern)
+		r.server.log.Info(pattern)
 	}
 
 	middlewares = append(middlewares, r.middlewares...)

@@ -4,15 +4,37 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"github.com/yates-z/easel/core/pool"
-	"github.com/yates-z/easel/logger"
-	templ "github.com/yates-z/easel/transport/http/server/template"
 	"html/template"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/yates-z/easel/core/pool"
+	"github.com/yates-z/easel/logger"
+	"github.com/yates-z/easel/logger/backend"
+	templ "github.com/yates-z/easel/transport/http/server/template"
+)
+
+var log = logger.NewLogger(
+	logger.WithLevel(logger.DebugLevel),
+	logger.WithBackends(logger.AnyLevel, backend.OSBackend().Build()),
+	logger.WithSeparator(logger.AnyLevel, "    "),
+	logger.WithFields(logger.AnyLevel,
+		logger.DatetimeField("2006/01/02 15:04:03").Key("datetime"),
+	),
+	logger.WithFields(logger.DebugLevel|logger.InfoLevel,
+		logger.LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(logger.Green),
+	),
+	logger.WithFields(logger.WarnLevel,
+		logger.LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(logger.Yellow),
+	),
+	logger.WithFields(logger.ErrorLevel|logger.FatalLevel|logger.PanicLevel,
+		logger.LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(logger.Red),
+	),
+	logger.WithFields(logger.AnyLevel, logger.MessageField().Key("msg")),
+	logger.WithEncoders(logger.AnyLevel, logger.PlainEncoder),
 )
 
 type ServerOption func(*Server)
@@ -67,6 +89,7 @@ type Server struct {
 	address  string
 	tlsConf  *tls.Config
 
+	log          logger.Logger
 	ctxPool      *pool.Pool[*Context]
 	middlewares  []Middleware
 	showInfo     bool
@@ -76,15 +99,15 @@ type Server struct {
 
 func New(opts ...ServerOption) *Server {
 	server := &Server{
-		network: "tcp",
-		address: ":80",
-
+		network:   "tcp",
+		address:   ":80",
+		log:       log,
 		showInfo:  false,
 		htmlTempl: templ.New(),
 	}
 	server.Router = NewRouter(server)
 	server.ctxPool = pool.New(func() *Context {
-		return newContext(nil, server)
+		return newContext(server)
 	})
 	server.errorHandler = func(ctx *Context, err error) {
 		http.Error(ctx.Response, err.Error(), http.StatusBadRequest)
@@ -147,7 +170,7 @@ func (s *Server) Run() error {
 			return err
 		}
 		s.listener = listener
-		logger.Infof("[http] server listening on: %s", s.listener.Addr().String())
+		s.log.Infof("[http] server listening on: %s", s.listener.Addr().String())
 	}
 	if s.tlsConf != nil {
 		return s.ServeTLS(s.listener, "", "")
@@ -159,19 +182,19 @@ func (s *Server) MustRun() {
 	if s.listener == nil {
 		listener, err := net.Listen(s.network, s.address)
 		if err != nil {
-			logger.Fatal(err)
+			s.log.Fatal(err)
 		}
 		s.listener = listener
-		logger.Infof("[http] server listening on: %s", s.listener.Addr().String())
+		s.log.Infof("[http] server listening on: %s", s.listener.Addr().String())
 	}
 	if s.tlsConf != nil {
 		if err := s.ServeTLS(s.listener, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Fatal(err)
+			s.log.Fatal(err)
 		}
 		return
 	}
 	if err := s.Serve(s.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		logger.Fatal(err)
+		s.log.Fatal(err)
 	}
 }
 
@@ -186,21 +209,21 @@ func (s *Server) Start(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := s.Shutdown(ctx); err != nil {
-		logger.Fatalf("Server Shutdown error: %v", err)
+		s.log.Fatalf("[HTTP] server Shutdown error: %v", err)
 	}
 
-	logger.Info("Server gracefully stopped")
+	s.log.Info("[HTTP] server gracefully stopped")
 }
 
 // Close immediately closes all active net.
 func (s *Server) Close() error {
-	logger.Info("[HTTP] server is closing")
+	s.log.Info("[HTTP] server is closing")
 	return s.Server.Close()
 }
 
 // Shutdown gracefully shuts down the server without interrupting any
 // // active connections..
 func (s *Server) Shutdown(ctx context.Context) error {
-	logger.Info("[HTTP] server is stopping")
+	s.log.Info("[HTTP] server is stopping")
 	return s.Server.Shutdown(ctx)
 }

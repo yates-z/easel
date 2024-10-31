@@ -1,12 +1,13 @@
 package benchmark
 
 import (
-	"github.com/yates-z/easel/logger"
-	"github.com/yates-z/easel/logger/backend"
 	"log/slog"
 	"os"
 	"strconv"
 	"testing"
+
+	"github.com/yates-z/easel/logger"
+	"github.com/yates-z/easel/logger/backend"
 )
 
 type stringer struct {
@@ -21,7 +22,7 @@ func (s stringer) String() string {
 // 74779             15248 ns/op               5 B/op          0 allocs/op
 // 75206             15215 ns/op               5 B/op          0 allocs/op
 func BenchmarkDefault(b *testing.B) {
-	msg := &stringer{}
+	// msg := &stringer{}
 	log := logger.NewLogger(
 		logger.WithLevel(logger.InfoLevel),
 		logger.WithBackends(logger.AnyLevel, backend.OSBackend().Build()),
@@ -31,22 +32,22 @@ func BenchmarkDefault(b *testing.B) {
 			logger.LevelField().Upper(),
 			logger.MessageField(),
 			//logger.TimeField(logger.UnixMilli).Background(logger.Green),
-			//logger.FuncNameField(true),
-			//logger.CallerField(true, true),
+			// logger.FuncNameField(true),
+			// logger.CallerField(true, true),
 		),
 		logger.WithEncoders(logger.AnyLevel, logger.LogFmtEncoder),
 	)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		log.Info(msg, n, n)
-		//log.Infos("hello world",
-		//	logger.Group("TEST",
-		//		logger.F("test", "6"),
-		//		logger.F("test", "7"),
-		//		logger.F("test", "7"),
-		//	),
-		//	logger.F("test", strconv.Itoa(n)),
-		//)
+		// log.Info(msg, n, n)
+		log.Infos("hello world",
+			logger.Group("TEST",
+				logger.F("test", "你好"),
+				logger.F("test", 7),
+				logger.F("test", 6.1),
+			),
+			// logger.F("test", strconv.Itoa(n)),
+		)
 	}
 	b.ReportAllocs()
 }

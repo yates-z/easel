@@ -1,39 +1,37 @@
 package cache
 
 import (
-	"fmt"
-	"hash/fnv"
 	"sync"
 	"time"
 )
 
-// Node is a doubly linked list
-type Node[K comparable, V any] struct {
+// MemCacheNode is a doubly linked list
+type MemCacheNode[K comparable, V any] struct {
 	Key        K
 	Value      V
 	Expiration int64
-	prev       *Node[K, V]
-	next       *Node[K, V]
+	prev       *MemCacheNode[K, V]
+	next       *MemCacheNode[K, V]
 }
 
 // IsExpired check whether it has expired.
-func (node *Node[K, V]) IsExpired() bool {
+func (node *MemCacheNode[K, V]) IsExpired() bool {
 	if node.Expiration <= 0 {
 		return false // never expire.
 	}
 	return time.Now().UnixNano() > node.Expiration
 }
 
-type Shard[K comparable, V any] struct {
+type MemCacheShard[K comparable, V any] struct {
 	capacity int
-	nodes    map[K]*Node[K, V]
+	nodes    map[K]*MemCacheNode[K, V]
 	mu       sync.Mutex
-	head     *Node[K, V]
-	tail     *Node[K, V]
+	head     *MemCacheNode[K, V]
+	tail     *MemCacheNode[K, V]
 }
 
 // Move a node to the front of the list
-func (s *Shard[K, V]) moveToFront(node *Node[K, V]) {
+func (s *MemCacheShard[K, V]) moveToFront(node *MemCacheNode[K, V]) {
 	if node == s.head {
 		return
 	}
@@ -66,7 +64,7 @@ func (s *Shard[K, V]) moveToFront(node *Node[K, V]) {
 }
 
 // Remove removes a key from the cache
-func (s *Shard[K, V]) remove(node *Node[K, V]) {
+func (s *MemCacheShard[K, V]) remove(node *MemCacheNode[K, V]) {
 	delete(s.nodes, node.Key)
 
 	// Update pointers
@@ -92,7 +90,7 @@ func (s *Shard[K, V]) remove(node *Node[K, V]) {
 }
 
 // Remove the least recently used node (tail)
-func (s *Shard[K, V]) removeTail() {
+func (s *MemCacheShard[K, V]) removeTail() {
 	if s.tail == nil {
 		return
 	}
@@ -100,7 +98,7 @@ func (s *Shard[K, V]) removeTail() {
 }
 
 // Set a key-value pair to cache.
-func (s *Shard[K, V]) set(key K, value V, ttl time.Duration) {
+func (s *MemCacheShard[K, V]) set(key K, value V, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -109,10 +107,10 @@ func (s *Shard[K, V]) set(key K, value V, ttl time.Duration) {
 		node.Value = value
 		node.Expiration = expirationTime(ttl)
 		s.moveToFront(node)
-		return
+		return nil
 	}
 	// Add new node
-	newNode := &Node[K, V]{
+	newNode := &MemCacheNode[K, V]{
 		Key:        key,
 		Value:      value,
 		Expiration: expirationTime(ttl),
@@ -124,10 +122,11 @@ func (s *Shard[K, V]) set(key K, value V, ttl time.Duration) {
 	if len(s.nodes) > s.capacity {
 		s.removeTail()
 	}
+	return nil
 }
 
 // Get a value from given key
-func (s *Shard[K, V]) get(key K) (value V, ok bool) {
+func (s *MemCacheShard[K, V]) get(key K) (value V, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	node, exists := s.nodes[key]
@@ -141,7 +140,8 @@ func (s *Shard[K, V]) get(key K) (value V, ok bool) {
 	return node.Value, true
 }
 
-func (s *Shard[K, V]) getOrSet(key K, newVal V, ttl time.Duration) (value V, loaded bool) {
+// getOrSet never returns error.
+func (s *MemCacheShard[K, V]) getOrSet(key K, newVal V, ttl time.Duration) (value V, loaded bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -151,12 +151,12 @@ func (s *Shard[K, V]) getOrSet(key K, newVal V, ttl time.Duration) (value V, loa
 		if !node.IsExpired() {
 			// Key exists and is valid, move to front and return the value
 			s.moveToFront(node)
-			return node.Value, true
+			return node.Value, true, nil
 		}
 		s.remove(node)
 	}
 
-	newNode := &Node[K, V]{
+	newNode := &MemCacheNode[K, V]{
 		Key:        key,
 		Value:      newVal,
 		Expiration: expirationTime(ttl),
@@ -167,10 +167,10 @@ func (s *Shard[K, V]) getOrSet(key K, newVal V, ttl time.Duration) (value V, loa
 	if len(s.nodes) > s.capacity {
 		s.removeTail()
 	}
-	return newVal, false
+	return newVal, false, nil
 }
 
-func (s *Shard[K, V]) keys() []K {
+func (s *MemCacheShard[K, V]) keys() []K {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -181,7 +181,7 @@ func (s *Shard[K, V]) keys() []K {
 	return keys
 }
 
-func (s *Shard[K, V]) delete(key K) {
+func (s *MemCacheShard[K, V]) delete(key K) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -191,7 +191,7 @@ func (s *Shard[K, V]) delete(key K) {
 }
 
 // cleanup clean all keys expired.
-func (s *Shard[K, V]) cleanup() {
+func (s *MemCacheShard[K, V]) cleanup() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -202,7 +202,7 @@ func (s *Shard[K, V]) cleanup() {
 	}
 }
 
-func (s *Shard[K, V]) clear() {
+func (s *MemCacheShard[K, V]) clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -215,7 +215,7 @@ var _ Cache[string, string] = (*MemCache[string, string])(nil)
 
 // MemCache is a simple lru cache.
 type MemCache[K comparable, V any] struct {
-	shards     []*Shard[K, V]
+	shards     []*MemCacheShard[K, V]
 	numShards  int
 	capacity   int
 	cleanupDur time.Duration
@@ -226,7 +226,7 @@ func NewMemCache[K comparable, V any](numShards, capacity int, cleanupInterval t
 	if numShards <= 0 || capacity <= 0 {
 		panic("numShards and capacity must be greater than 0")
 	}
-	shards := make([]*Shard[K, V], numShards)
+	shards := make([]*MemCacheShard[K, V], numShards)
 	baseCapacity := capacity / numShards
 	extraCapacity := capacity % numShards // Remaining capacity to distribute
 	for i := 0; i < numShards; i++ {
@@ -234,9 +234,9 @@ func NewMemCache[K comparable, V any](numShards, capacity int, cleanupInterval t
 		if i < extraCapacity {
 			actualCapacity++ // Distribute the remaining capacity
 		}
-		shards[i] = &Shard[K, V]{
+		shards[i] = &MemCacheShard[K, V]{
 			capacity: actualCapacity,
-			nodes:    make(map[K]*Node[K, V]),
+			nodes:    make(map[K]*MemCacheNode[K, V]),
 		}
 	}
 	cache := &MemCache[K, V]{
@@ -250,27 +250,14 @@ func NewMemCache[K comparable, V any](numShards, capacity int, cleanupInterval t
 	return cache
 }
 
-func (c *MemCache[K, V]) getShard(key K) *Shard[K, V] {
+func (c *MemCache[K, V]) getShard(key K) *MemCacheShard[K, V] {
 	hash := fnv32(key)
 	return c.shards[hash%uint32(c.numShards)]
 }
 
-func fnv32(key any) uint32 {
-	hash := fnv.New32()
-	_, _ = hash.Write([]byte(fmt.Sprintf("%v", key)))
-	return hash.Sum32()
-}
-
-func expirationTime(ttl time.Duration) int64 {
-	if ttl > 0 {
-		return time.Now().Add(ttl).UnixNano()
-	}
-	return 0
-}
-
-func (c *MemCache[K, V]) Set(key K, value V, ttl time.Duration) {
+func (c *MemCache[K, V]) Set(key K, value V, ttl time.Duration) error {
 	shard := c.getShard(key)
-	shard.set(key, value, ttl)
+	return shard.set(key, value, ttl)
 }
 
 func (c *MemCache[K, V]) Get(key K) (value V, ok bool) {
@@ -287,7 +274,7 @@ func (c *MemCache[K, V]) GetDefault(key K, _default V) V {
 	return value
 }
 
-func (c *MemCache[K, V]) GetOrSet(key K, newVal V, ttl time.Duration) (value V, loaded bool) {
+func (c *MemCache[K, V]) GetOrSet(key K, newVal V, ttl time.Duration) (V, bool, error) {
 	shard := c.getShard(key)
 	return shard.getOrSet(key, newVal, ttl)
 }

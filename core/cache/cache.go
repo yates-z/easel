@@ -5,7 +5,7 @@ import "time"
 type Cache[K comparable, V any] interface {
 	// Set a value in the cache if the key does not already exist. If
 	// timeout is given, use that timeout for the key;
-	Set(key K, value V, ttl time.Duration)
+	Set(key K, value V, ttl time.Duration) error
 
 	// Get a given key from the cache.
 	Get(key K) (value V, ok bool)
@@ -19,7 +19,8 @@ type Cache[K comparable, V any] interface {
 	// timeout for the key.
 	// The value result is the value for the existing key or the given new value.
 	// The loaded result is true if the value was loaded, false if stored.
-	GetOrSet(key K, newVal V, ttl time.Duration) (value V, loaded bool)
+	// The err result reports error if setting a new val fails.
+	GetOrSet(key K, newVal V, ttl time.Duration) (V, bool, error)
 
 	// HasKey returns True if the key is in the cache and has not expired.
 	HasKey(key K) bool

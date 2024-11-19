@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"reflect"
 )
 
 const (
@@ -68,6 +69,11 @@ func (v Variant) ToFloat64() float64 {
 		return fn(v)
 	}
 	return 0
+}
+
+func (v Variant) Equal(other any) bool {
+	variant := New(other)
+	return reflect.DeepEqual(v, variant)
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.

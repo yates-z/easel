@@ -12,6 +12,14 @@ type Item[T any] struct {
 	priority int // The priority of the item
 }
 
+type Option[T any] func(q *PriorityQueue[T])
+
+func WithLessFunc[T any](less func(a, b *Item[T]) bool) Option[T] {
+	return func(q *PriorityQueue[T]) {
+		q.lessFunc = less
+	}
+}
+
 // PriorityQueue defines the priority queue
 type PriorityQueue[T any] struct {
 	items    []*Item[T]
@@ -20,12 +28,15 @@ type PriorityQueue[T any] struct {
 	itemPool *pool.Pool[*Item[T]]
 }
 
-func NewPriorityQueue[T any]() *PriorityQueue[T] {
+func NewPriorityQueue[T any](opts ...Option[T]) *PriorityQueue[T] {
 	pq := &PriorityQueue[T]{
-		lessFunc: func(a, b *Item[T]) bool { return a.priority < b.priority },
+		lessFunc: func(a, b *Item[T]) bool { return a.priority > b.priority },
 		itemPool: pool.New(func() *Item[T] {
 			return new(Item[T])
 		}),
+	}
+	for _, opt := range opts {
+		opt(pq)
 	}
 	return pq
 }
@@ -60,6 +71,7 @@ func (pq *PriorityQueue[T]) Pop() any {
 	return item
 }
 
+// Enqueue method adds elements to the queue.
 func (pq *PriorityQueue[T]) Enqueue(value T, priority int) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
@@ -69,6 +81,7 @@ func (pq *PriorityQueue[T]) Enqueue(value T, priority int) {
 	heap.Push(pq, item)
 }
 
+// Dequeue pops out of the queue and returns an element.
 func (pq *PriorityQueue[T]) Dequeue() (T, bool) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
@@ -84,6 +97,8 @@ func (pq *PriorityQueue[T]) Dequeue() (T, bool) {
 	return value, true
 }
 
+// Peek method returns the next element to be Dequeued,
+// but it will not actually be Dequeued.
 func (pq *PriorityQueue[T]) Peek() (T, bool) {
 	pq.mu.RLock()
 	defer pq.mu.RUnlock()
@@ -92,4 +107,36 @@ func (pq *PriorityQueue[T]) Peek() (T, bool) {
 		return zeroValue, false
 	}
 	return pq.items[0].value, true
+}
+
+// Clear all elements in the queue.
+func (pq *PriorityQueue[T]) Clear() {
+	pq.mu.Lock()
+	defer pq.mu.Unlock()
+	for _, item := range pq.items {
+		item.priority = 0
+		pq.itemPool.Put(item)
+	}
+	pq.items = nil
+}
+
+// Iterator returns all elements in the queue.
+func (pq *PriorityQueue[T]) Iterator() []T {
+	var result []T
+
+	pq.mu.RLock()
+	defer pq.mu.RUnlock()
+
+	var items []*Item[T]
+	for range pq.Len() {
+		item := heap.Pop(pq).(*Item[T])
+		result = append(result, item.value)
+		items = append(items, item)
+	}
+
+	for _, item := range items {
+		heap.Push(pq, item)
+	}
+
+	return result
 }

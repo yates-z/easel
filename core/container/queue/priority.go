@@ -3,6 +3,7 @@ package queue
 import (
 	"container/heap"
 	"github.com/yates-z/easel/core/pool"
+	"reflect"
 	"sync"
 )
 
@@ -10,6 +11,53 @@ import (
 type Item[T any] struct {
 	value    T   // The value of the item
 	priority int // The priority of the item
+}
+
+func (i Item[T]) Value() T {
+	return i.value
+}
+
+type priorityQueue[T any] struct {
+	items     []*Item[T]
+	lessFunc  func(a, b *Item[T]) bool
+	equalFunc func(a, b T) bool
+}
+
+// Len implements the Len method of sort.Interface
+func (pq *priorityQueue[T]) Len() int { return len(pq.items) }
+
+// Less implements the Less method of sort.Interface
+// Items with higher priority will appear earlier
+func (pq *priorityQueue[T]) Less(i, j int) bool {
+	return pq.lessFunc(pq.items[i], pq.items[j])
+}
+
+// Swap implements the Swap method of sort.Interface
+func (pq *priorityQueue[T]) Swap(i, j int) {
+	pq.items[i], pq.items[j] = pq.items[j], pq.items[i]
+}
+
+// Push adds an element to the heap
+func (pq *priorityQueue[T]) Push(x any) {
+	item := x.(*Item[T])
+	pq.items = append(pq.items, item)
+}
+
+// Pop removes and returns the highest-priority element from the heap
+func (pq *priorityQueue[T]) Pop() any {
+	old := pq.items
+	n := len(old)
+	item := old[n-1]
+	old[n-1] = nil
+	pq.items = old[0 : n-1]
+	return item
+}
+
+// PriorityQueue defines the priority queue
+type PriorityQueue[T any] struct {
+	priorityQueue[T]
+	mu       sync.RWMutex
+	itemPool *pool.Pool[*Item[T]]
 }
 
 type Option[T any] func(q *PriorityQueue[T])
@@ -20,17 +68,18 @@ func WithLessFunc[T any](less func(a, b *Item[T]) bool) Option[T] {
 	}
 }
 
-// PriorityQueue defines the priority queue
-type PriorityQueue[T any] struct {
-	items    []*Item[T]
-	mu       sync.RWMutex
-	lessFunc func(a, b *Item[T]) bool
-	itemPool *pool.Pool[*Item[T]]
+func WithEqualFunc[T any](equal func(a, b T) bool) Option[T] {
+	return func(q *PriorityQueue[T]) {
+		q.equalFunc = equal
+	}
 }
 
 func NewPriorityQueue[T any](opts ...Option[T]) *PriorityQueue[T] {
 	pq := &PriorityQueue[T]{
-		lessFunc: func(a, b *Item[T]) bool { return a.priority > b.priority },
+		priorityQueue: priorityQueue[T]{
+			lessFunc:  func(a, b *Item[T]) bool { return a.priority > b.priority },
+			equalFunc: func(a, b T) bool { return reflect.DeepEqual(a, b) },
+		},
 		itemPool: pool.New(func() *Item[T] {
 			return new(Item[T])
 		}),
@@ -39,36 +88,6 @@ func NewPriorityQueue[T any](opts ...Option[T]) *PriorityQueue[T] {
 		opt(pq)
 	}
 	return pq
-}
-
-// Len implements the Len method of sort.Interface
-func (pq *PriorityQueue[T]) Len() int { return len(pq.items) }
-
-// Less implements the Less method of sort.Interface
-// Items with higher priority will appear earlier
-func (pq *PriorityQueue[T]) Less(i, j int) bool {
-	return pq.lessFunc(pq.items[i], pq.items[j])
-}
-
-// Swap implements the Swap method of sort.Interface
-func (pq *PriorityQueue[T]) Swap(i, j int) {
-	pq.items[i], pq.items[j] = pq.items[j], pq.items[i]
-}
-
-// Push adds an element to the heap
-func (pq *PriorityQueue[T]) Push(x any) {
-	item := x.(*Item[T])
-	pq.items = append(pq.items, item)
-}
-
-// Pop removes and returns the highest-priority element from the heap
-func (pq *PriorityQueue[T]) Pop() any {
-	old := pq.items
-	n := len(old)
-	item := old[n-1]
-	old[n-1] = nil
-	pq.items = old[0 : n-1]
-	return item
 }
 
 // Enqueue method adds elements to the queue.
@@ -120,23 +139,48 @@ func (pq *PriorityQueue[T]) Clear() {
 	pq.items = nil
 }
 
-// Iterator returns all elements in the queue.
+// Iterator returns all elements in the queue sorted by priority (highest first).
 func (pq *PriorityQueue[T]) Iterator() []T {
-	var result []T
 
 	pq.mu.RLock()
 	defer pq.mu.RUnlock()
 
-	var items []*Item[T]
-	for range pq.Len() {
-		item := heap.Pop(pq).(*Item[T])
-		result = append(result, item.value)
-		items = append(items, item)
-	}
+	itemsCopy := make([]*Item[T], len(pq.items))
+	copy(itemsCopy, pq.items)
 
-	for _, item := range items {
-		heap.Push(pq, item)
+	tempQueue := &priorityQueue[T]{items: itemsCopy, lessFunc: pq.lessFunc}
+	heap.Init(tempQueue)
+
+	result := make([]T, len(itemsCopy))
+	for i := 0; i < len(itemsCopy); i++ {
+		result[i] = heap.Pop(tempQueue).(*Item[T]).value
 	}
 
 	return result
+}
+
+// Remove removes an element matching the provided value and maintains the queue order.
+// It returns true if the element was found and removed, otherwise false.
+func (pq *PriorityQueue[T]) Remove(data T) bool {
+	pq.mu.Lock()
+	defer pq.mu.Unlock()
+
+	index := -1
+	for i, item := range pq.items {
+		if pq.equalFunc(data, item.value) {
+			index = i
+			break
+		}
+	}
+
+	if index == -1 {
+		return false
+	}
+
+	removedItem := heap.Remove(pq, index).(*Item[T])
+
+	removedItem.priority = 0
+	removedItem.value = *new(T)
+	pq.itemPool.Put(removedItem)
+	return true
 }

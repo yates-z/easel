@@ -9,11 +9,26 @@ import (
 
 // Item defines the elements in the priority queue
 type Item[T any] struct {
-	value    T   // The value of the item
+	id       int64
 	priority int // The priority of the item
+	value    T   // The value of the item
 }
 
-func (i Item[T]) Value() T {
+func (i *Item[T]) reset() {
+	i.id = 0
+	i.priority = 0
+	i.value = *new(T)
+}
+
+func (i *Item[T]) ID() int64 {
+	return i.id
+}
+
+func (i *Item[T]) Priority() int {
+	return i.priority
+}
+
+func (i *Item[T]) Value() T {
 	return i.value
 }
 
@@ -56,6 +71,7 @@ func (pq *priorityQueue[T]) Pop() any {
 // PriorityQueue defines the priority queue
 type PriorityQueue[T any] struct {
 	priorityQueue[T]
+	next     int64
 	mu       sync.RWMutex
 	itemPool *pool.Pool[*Item[T]]
 }
@@ -80,6 +96,7 @@ func NewPriorityQueue[T any](opts ...Option[T]) *PriorityQueue[T] {
 			lessFunc:  func(a, b *Item[T]) bool { return a.priority > b.priority },
 			equalFunc: func(a, b T) bool { return reflect.DeepEqual(a, b) },
 		},
+		next: 0,
 		itemPool: pool.New(func() *Item[T] {
 			return new(Item[T])
 		}),
@@ -91,13 +108,16 @@ func NewPriorityQueue[T any](opts ...Option[T]) *PriorityQueue[T] {
 }
 
 // Enqueue method adds elements to the queue.
-func (pq *PriorityQueue[T]) Enqueue(value T, priority int) {
+func (pq *PriorityQueue[T]) Enqueue(value T, priority int) int64 {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 	item := pq.itemPool.Get()
+	item.id = pq.next
 	item.value = value
 	item.priority = priority
 	heap.Push(pq, item)
+	pq.next++
+	return item.id
 }
 
 // Dequeue pops out of the queue and returns an element.
@@ -110,8 +130,7 @@ func (pq *PriorityQueue[T]) Dequeue() (T, bool) {
 	}
 	item := heap.Pop(pq).(*Item[T])
 	value := item.value
-	item.priority = 0
-	item.value = *new(T)
+	item.reset()
 	pq.itemPool.Put(item)
 	return value, true
 }
@@ -133,10 +152,11 @@ func (pq *PriorityQueue[T]) Clear() {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 	for _, item := range pq.items {
-		item.priority = 0
+		item.reset()
 		pq.itemPool.Put(item)
 	}
 	pq.items = nil
+	pq.next = 0
 }
 
 // Iterator returns all elements in the queue sorted by priority (highest first).
@@ -179,8 +199,7 @@ func (pq *PriorityQueue[T]) Remove(data T) bool {
 
 	removedItem := heap.Remove(pq, index).(*Item[T])
 
-	removedItem.priority = 0
-	removedItem.value = *new(T)
+	removedItem.reset()
 	pq.itemPool.Put(removedItem)
 	return true
 }

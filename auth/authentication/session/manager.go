@@ -179,3 +179,39 @@ func (sm *SessionManager) GetAndRenewSession(sessionID string) (*Session, error)
 	sm.backend.Save(session, sm.sessionTTL)
 	return session, nil
 }
+
+/*
+	RotateSession regenerates the session ID while keeping session data intact.
+
+Which scenarios are suitable for using session rotation mechanism?
+After user authentication
+When the user successfully logs in, a new session ID is generated to prevent attackers from
+hijacking the old session ID before authentication.
+
+Before and after sensitive operations
+Rotating session IDs enhances security after users perform certain sensitive operations, such
+as changing passwords or making payments.
+
+Regular rotation
+Regularly rotate session IDs to reduce the risk of session IDs being brute force cracked or stolen.
+*/
+func (sm *SessionManager) RotateSession(oldSessionID string) (string, error) {
+	// Load the existing session
+	sess, err := sm.GetSession(oldSessionID)
+	if err != nil {
+		return "", err
+	}
+
+	// Create a new session ID
+	newSessionID := sm.generateSignedSessionID()
+
+	// Save the session data with the new session ID
+	if err := sm.backend.Save(sess, sm.sessionTTL); err != nil {
+		return "", err
+	}
+
+	// Delete the old session
+	sm.backend.Delete(oldSessionID)
+
+	return newSessionID, nil
+}

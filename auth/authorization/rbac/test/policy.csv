@@ -1,0 +1,3 @@
+admin,/data,read
+admin,/data,write
+user,/data,read

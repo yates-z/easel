@@ -18,6 +18,8 @@ type Variant struct {
 	Data []byte
 }
 
+var Nil = Variant{Type: Invalid}
+
 func (v Variant) String() string {
 	return fmt.Sprintf("Variant(%v, %v)", v.Type, v.Data)
 }

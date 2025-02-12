@@ -1,0 +1,17 @@
+server:
+  port: 8080  # 随机端口或指定端口
+ 
+databases:
+  main:
+    host: 127.0.0.1
+    port: 3306
+    name: test  # 数据库名称
+    username: root  # 数据库用户名
+    password: 66666  # 数据库密码
+    version: 
+      - v1
+      - v2
+      - v3
+ 
+logging:
+  level: DEBUG

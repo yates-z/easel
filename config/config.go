@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"strconv"
 	"strings"
@@ -21,8 +22,8 @@ type Config struct {
 
 var config *Config = &Config{}
 
-// LoadConfig reads the YAML configuration file and loads it into the values map
-func LoadConfig(filePath string) {
+// LoadFile reads the YAML configuration file and loads it into the values map
+func LoadFile(filePath string) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		logger.Fatalf("Error reading config file: %v", err)
@@ -72,21 +73,104 @@ func Get(path string) variant.Variant {
 	return variant.New(current)
 }
 
-// Set sets a configuration value by its key, supporting nested keys using dot notation (e.g., "database.host").
-// Note: The Set method does not allow setting values for non-existent keys, If necessary, please use the Add method.
-// TODO: Implement the Set method
-func Set(path string, value any) error {
+// set sets a configuration value by its key, supporting nested keys using dot notation (e.g., "database.host").
+func set(path string, value any) error {
 	config.mu.Lock()
 	defer config.mu.Unlock()
+
+	parts := parsePath(path)
+
+	var parent any
+	var current any = config.data
+	for i, part := range parts {
+		// fmt.Printf("parent: %+v, current: %+v\n\n", parent, current)
+		if part.kind == Index {
+			index, error := strconv.Atoi(part.value)
+			if error != nil {
+				return error
+			}
+
+			currentSlice, ok := current.([]any)
+			if !ok {
+				return errors.New("invalid type")
+			}
+
+			// expand the length of the slice.
+			if index > len(currentSlice) || index < 0 {
+				return errors.New("index out of range")
+			}
+			if index == len(currentSlice) {
+				newSlice := make([]any, index+1)
+				copy(newSlice, currentSlice)
+				currentSlice = newSlice
+
+				if part.parent.kind == Key {
+					parentMap, _ := parent.(map[string]any)
+					parentMap[part.parent.value] = newSlice
+				} else {
+					parentSlice, _ := parent.([]any)
+					parentIndex, _ := strconv.Atoi(part.parent.value)
+					parentSlice[parentIndex] = newSlice
+				}
+			}
+
+			// set the value if it is a leaf node.
+			if part.isLeaf {
+				currentSlice[index] = value
+				return nil
+			}
+
+			if currentSlice[index] == nil {
+				if parts[i+1].kind == Index {
+					currentSlice[index] = make([]any, 0)
+				} else {
+					currentSlice[index] = make(map[string]any)
+				}
+			}
+			parent = currentSlice
+			current = currentSlice[index]
+		} else if part.kind == Key {
+			currentMap, ok := current.(map[string]any)
+			if !ok {
+				return errors.New("invalid type")
+			}
+
+			// set the value if it is a leaf node.
+			if part.isLeaf {
+				currentMap[part.value] = value
+				return nil
+			}
+
+			// create a new map/slice if the key does not exist.a.b.c
+			if _, exists := currentMap[part.value]; !exists {
+				if parts[i+1].kind == Index {
+					currentMap[part.value] = make([]any, 0)
+				} else {
+					currentMap[part.value] = make(map[string]any)
+				}
+			}
+			parent = currentMap
+			current = currentMap[part.value]
+		}
+	}
 
 	return nil
 }
 
-// Add adds a configuration value by its key, supporting nested keys using dot notation (e.g., "database.host").
-// Note: The Add method does not allow setting values for existing keys. If necessary, please use the Set method.
-// TODO: Implement the Add method
-func Add(path string, value any) error {
-	return nil
+func SetInt(path string, value int) error {
+	return set(path, value)
+}
+
+func SetFloat64(path string, value float64) error {
+	return set(path, value)
+}
+
+func SetString(path string, value string) error {
+	return set(path, value)
+}
+
+func SetBool(path string, value bool) error {
+	return set(path, value)
 }
 
 // overrideWithEnvVariables overrides configuration values with environment variables if they exist
@@ -97,13 +181,13 @@ func overrideWithEnvVariables() {
 
 		// split the key and value.
 		kv := strings.SplitN(env, "=", 2)
-		println(kv)
+
 		if len(kv) != 2 {
 			continue
 		}
 		key, value := kv[0], kv[1]
 		//
-		if err := Set(key, value); err != nil {
+		if err := set(key, value); err != nil {
 			logger.Errorf("handle environ variables %s failed: %w", key, err)
 		}
 	}

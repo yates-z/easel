@@ -9,9 +9,15 @@ databases:
     username: root  # 数据库用户名
     password: 66666  # 数据库密码
     version: 
-      - v1
+      - - v1.1
+        - v1.2
+        - v1.3
       - v2
       - v3
  
 logging:
   level: DEBUG
+
+mytest:
+  version:
+    - v1.1

@@ -138,7 +138,7 @@ func (c stringConverter) FromFloat32(v Variant) string {
 	if len(v.Data) == 4 {
 		f = math.Float32frombits(binary.BigEndian.Uint32(v.Data))
 	}
-	return strconv.FormatFloat(float64(f), 'g', -1, 32)
+	return strconv.FormatFloat(float64(f), 'f', -1, 32)
 }
 
 func (c stringConverter) FromFloat64(v Variant) string {
@@ -146,7 +146,7 @@ func (c stringConverter) FromFloat64(v Variant) string {
 	if len(v.Data) == 8 {
 		f = math.Float64frombits(binary.BigEndian.Uint64(v.Data))
 	}
-	return strconv.FormatFloat(f, 'g', -1, 64)
+	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
 func newStringConverter() *stringConverter {

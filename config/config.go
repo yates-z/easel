@@ -11,15 +11,15 @@ import (
 type Option func(*config)
 
 // WithSource with config source.
-func WithSource(s ...Source) Option {
+func WithSource(s Source) Option {
 	return func(c *config) {
-		c.sources = s
+		c.sources = append(c.sources, s)
 	}
 }
 
 type config struct {
 	mu      sync.RWMutex
-	content content
+	content *Content
 	sources []Source
 }
 
@@ -37,7 +37,7 @@ func New(opts ...Option) *config {
 		if err != nil {
 			logger.Fatalf(err.Error())
 		}
-		c.content.merge(content)
+		c.content.Merge(content)
 	}
 	return c
 }
@@ -46,33 +46,33 @@ func (c *config) Get(path string) (variant.Variant, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return c.content.get(path)
+	return c.content.Get(path)
 }
 
 // SetInt sets an int value at the specified path.
 func (c *config) SetInt(path string, value int) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.content.set(path, value)
+	return c.content.Set(path, value)
 }
 
 // SetFloat64 sets a float64 value at the specified path.
 func (c *config) SetFloat64(path string, value float64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.content.set(path, value)
+	return c.content.Set(path, value)
 }
 
 // SetString sets a string value at the specified path.
 func (c *config) SetString(path string, value string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.content.set(path, value)
+	return c.content.Set(path, value)
 }
 
 // SetBool sets a bool value at the specified path.
 func (c *config) SetBool(path string, value bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.content.set(path, value)
+	return c.content.Set(path, value)
 }

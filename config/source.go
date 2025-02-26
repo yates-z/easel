@@ -11,7 +11,7 @@ import (
 )
 
 type Source interface {
-	Load() (content, error)
+	Load() (*Content, error)
 }
 
 var _ Source = (*file)(nil)
@@ -25,7 +25,7 @@ func NewFile(path string) *file {
 	return &file{path: path}
 }
 
-func (f *file) Load() (content, error) {
+func (f *file) Load() (*Content, error) {
 	p := strings.Split(f.path, ".")
 	if len(p) <= 1 {
 		return nil, errors.New("invalid file path")
@@ -47,18 +47,18 @@ func (f *file) Load() (content, error) {
 	}
 }
 
-func parseYAML(bytes []byte) (content, error) {
+func parseYAML(bytes []byte) (*Content, error) {
 	c := NewContent()
-	err := yaml.Unmarshal(bytes, &c)
+	err := yaml.Unmarshal(bytes, &c.content)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing config file: %v", err)
 	}
 	return c, nil
 }
 
-func parseJSON(bytes []byte) (content, error) {
+func parseJSON(bytes []byte) (*Content, error) {
 	c := NewContent()
-	err := json.Unmarshal(bytes, &c)
+	err := json.Unmarshal(bytes, &c.content)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing config file: %v", err)
 	}
@@ -77,7 +77,7 @@ func NewEnviron(prefixes ...string) *environment {
 }
 
 // Load implements Source.
-func (e *environment) Load() (content, error) {
+func (e *environment) Load() (*Content, error) {
 	c := NewContent()
 
 	// handle environment variables.
@@ -101,7 +101,7 @@ func (e *environment) Load() (content, error) {
 		}
 
 		if len(key) != 0 {
-			err := c.set(key, value)
+			err := c.Set(key, value)
 			if err != nil {
 				return nil, fmt.Errorf("handle environ variables %s failed: %w", key, err)
 			}

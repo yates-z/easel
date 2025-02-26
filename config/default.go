@@ -2,9 +2,16 @@ package config
 
 import "github.com/yates-z/easel/core/variant"
 
-const DefaultConfigPath = "config.yaml"
+const DefaultConfigPath = "config.yml"
 
-var defaultConfig *config = &config{}
+var defaultConfig *config
+
+func Load(path string) {
+	defaultConfig = New(
+		WithSource(NewFile(path)),
+		WithSource(NewEnviron()),
+	)
+}
 
 func Get(path string) (variant.Variant, bool) {
 	return defaultConfig.Get(path)

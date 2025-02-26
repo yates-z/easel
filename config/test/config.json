@@ -1,0 +1,14 @@
+{
+    "namespace": "1111",
+    "filePath": "D:\\sdcd\\files\\",
+    "address": [
+        {
+            "phone": 12312233,
+            "mail": ""
+        }
+    ],
+    "myCar": {
+        "band": "bmw",
+        "price": ""
+    }
+}

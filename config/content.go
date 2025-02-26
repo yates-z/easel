@@ -8,16 +8,18 @@ import (
 	"github.com/yates-z/easel/core/variant"
 )
 
-type content map[string]any
-
-func NewContent() content {
-	return make(content)
+type Content struct {
+	content map[string]any
 }
 
-func (c *content) merge(other content) {
-	for key, value := range other {
+func NewContent() *Content {
+	return &Content{content: make(map[string]any)}
+}
+
+func (c *Content) Merge(other *Content) {
+	for key, value := range other.content {
 		// if the current value and the value in other have the same type, merge them.
-		if existing, ok := (*c)[key]; ok {
+		if existing, ok := c.content[key]; ok {
 			// if the value is a map type, merge the map recursively.
 			if existingMap, ok := existing.(map[string]any); ok {
 				if otherMap, ok := value.(map[string]any); ok {
@@ -25,7 +27,7 @@ func (c *content) merge(other content) {
 					mergeMap(existingMap, otherMap)
 				} else {
 					// otherwise, replace directly.
-					(*c)[key] = value
+					c.content[key] = value
 				}
 			} else if existingSlice, ok := existing.([]any); ok {
 				// if the value is a slice type, merge the slice recursively.
@@ -33,14 +35,14 @@ func (c *content) merge(other content) {
 					// recursively merge nested slices.
 					mergeSlice(existingSlice, otherSlice)
 				} else {
-					(*c)[key] = value
+					c.content[key] = value
 				}
 			} else {
-				(*c)[key] = value
+				c.content[key] = value
 			}
 		} else {
 			// if the key does not exist, add it directly.
-			(*c)[key] = value
+			c.content[key] = value
 		}
 	}
 }
@@ -93,11 +95,11 @@ func mergeSlice(existing, other []any) {
 }
 
 // Get retrieves a configuration value by its key, supporting nested keys using dot notation (e.g., "database.host")
-func (c *content) get(path string) (variant.Variant, bool) {
+func (c *Content) Get(path string) (variant.Variant, bool) {
 
 	parts := parsePath(path)
 
-	var current any = c
+	var current any = c.content
 
 	for _, part := range parts {
 		if part.kind == Index {
@@ -111,7 +113,7 @@ func (c *content) get(path string) (variant.Variant, bool) {
 			}
 			current = currentSlice[index]
 		} else if part.kind == Key {
-			currentMap, ok := current.(map[string]interface{})
+			currentMap, ok := current.(map[string]any)
 			if !ok {
 				return variant.Nil, false
 			}
@@ -127,12 +129,12 @@ func (c *content) get(path string) (variant.Variant, bool) {
 }
 
 // set sets a configuration value by its key, supporting nested keys using dot notation (e.g., "database.host").
-func (c *content) set(path string, value any) error {
+func (c *Content) Set(path string, value any) error {
 
 	parts := parsePath(path)
 
 	var parent any
-	var current any = c
+	var current any = c.content
 	for i, part := range parts {
 		// fmt.Printf("parent: %+v, current: %+v\n\n", parent, current)
 		if part.kind == Index {

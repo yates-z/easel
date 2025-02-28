@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"testing"
+	"time"
 )
 
 func assert(condition bool, message string) {
@@ -56,6 +57,10 @@ func TestVariant_ToInt(t *testing.T) {
 	assert(v.ToInt() == 100, "")
 	v = New(float32(-100.86))
 	assert(v.ToInt() == -100, "")
+
+	tt := time.Now()
+	v = New(tt)
+	assert(v.ToInt() == int(tt.UnixNano()), "")
 }
 
 func TestVariant_ToString(t *testing.T) {
@@ -86,43 +91,51 @@ func TestVariant_ToString(t *testing.T) {
 	assert(v.ToString() == "false", "")
 	v = New(map[string]int{})
 	assert(v.ToString() == "", "")
+
+	tt := time.Now()
+	v = New(tt)
+	assert(v.ToString() == tt.Format("2006/01/02 15:04:05"), "")
 }
 
 func TestVariant_ToUint(t *testing.T) {
 	// bool
 	v := New(true)
-	assert(v.ToUint() == 1, "")
+	assert(v.ToUint() == 1, "1")
 	v = New(false)
-	assert(v.ToUint() == 0, "")
+	assert(v.ToUint() == 0, "2")
 	v = New(-9223372036854775808)
-	assert(v.ToUint() == 0, "")
+	assert(v.ToUint() == 0, "3")
 
 	v = New(uint(9223372036854775810))
-	assert(v.ToUint() == 9223372036854775810, "")
+	assert(v.ToUint() == 9223372036854775810, "4")
 
 	v = New(int8(-100))
-	assert(v.ToUint() == 0, "")
+	assert(v.ToUint() == 0, "5")
 	v = New(int8(100))
-	assert(v.ToUint() == 100, "")
+	assert(v.ToUint() == 100, "6")
 	v = New(int16(-100))
-	assert(v.ToUint() == 0, "")
+	assert(v.ToUint() == 0, "7")
 	v = New(int32(-100))
-	assert(v.ToUint() == 0, "")
+	assert(v.ToUint() == 0, "8")
 	v = New(int64(-100))
-	assert(v.ToUint() == 0, "")
+	assert(v.ToUint() == 0, "9")
 	v = New(uint8(255))
-	assert(v.ToUint() == 255, "")
+	assert(v.ToUint() == 255, "10")
 	v = New(uint16(65535))
-	assert(v.ToUint() == 65535, "")
+	assert(v.ToUint() == 65535, "11")
 
 	v = New(-65535)
-	assert(v.ToUint() == 0, "")
+	assert(v.ToUint() == 0, "12")
 	v = New(100.86)
-	assert(v.ToUint() == 100, "")
+	assert(v.ToUint() == 100, "13")
 	v = New(float32(100.86))
-	assert(v.ToUint() == 100, "")
+	assert(v.ToUint() == 100, "14")
 	v = New(float32(-100.86))
-	assert(v.ToUint() == 0, "")
+	assert(v.ToUint() != 0, "15")
+
+	tt := time.Now()
+	v = New(tt)
+	assert(v.ToUint() == uint(tt.UnixNano()), "16")
 }
 
 func TestVariant_ToBool(t *testing.T) {
@@ -176,6 +189,10 @@ func TestVariant_ToBool(t *testing.T) {
 	assert(v.ToBool() == false, "")
 	v = New(int64(-1))
 	assert(v.ToBool() == true, "")
+
+	tt := time.Now()
+	v = New(tt)
+	assert(v.ToBool() == true, "")
 }
 
 func TestVariant_ToFloat32(t *testing.T) {
@@ -207,6 +224,10 @@ func TestVariant_ToFloat32(t *testing.T) {
 	assert(v.ToFloat32() == -86.1, "")
 	v = New(-86.1)
 	assert(v.ToFloat32() == -86.1, "")
+
+	tt := time.Now()
+	v = New(tt)
+	assert(v.ToFloat32() == float32(tt.UnixNano()), "")
 }
 
 func TestVariant_ToFloat64(t *testing.T) {
@@ -238,6 +259,10 @@ func TestVariant_ToFloat64(t *testing.T) {
 	assert(v.ToFloat64() == -86.2, "13")
 	v = New(-86.1)
 	assert(v.ToFloat64() == -86.1, "14")
+
+	tt := time.Now()
+	v = New(tt)
+	assert(v.ToFloat64() == float64(tt.UnixNano()), "")
 }
 
 func TestVariant_Empty(t *testing.T) {
@@ -279,6 +304,49 @@ func TestVariant_Empty(t *testing.T) {
 	assert(v.ToUint() == 0, "")
 	assert(v.ToFloat32() == 0, "")
 	assert(v.ToFloat64() == 0, "")
+
+	v = Variant{Type: Time}
+	assert(v.ToString() == "", "")
+	assert(!v.ToBool(), "")
+	assert(v.ToInt() == 0, "")
+	assert(v.ToUint() == 0, "")
+	assert(v.ToFloat32() == 0, "")
+	assert(v.ToFloat64() == 0, "")
+}
+
+func Test_ToTime(t *testing.T) {
+	v := New(true)
+	assert(v.ToTime() == time.Now(), "1")
+	v = New(false)
+	assert(v.ToTime() == time.Time{}, "2")
+	v = New(uint(0))
+	assert(v.ToTime() == time.Unix(0, 0), "3")
+	v = New(uint8(86))
+	assert(v.ToTime() == time.Unix(0, 86), "4")
+	v = New(10086)
+	assert(v.ToTime() == time.Unix(0, 10086), "5")
+	v = New(int8(86))
+	assert(v.ToTime() == time.Unix(0, 86), "6")
+	v = New(int16(0))
+	assert(v.ToTime() == time.Unix(0, 0), "7")
+	v = New(int32(86))
+	assert(v.ToTime() == time.Unix(0, 86), "8")
+	v = New(int64(86))
+	assert(v.ToTime() == time.Unix(0, 86), "9")
+	v = New("100.86")
+	assert(v.ToTime() == time.Time{}, "10")
+	v = New("-100.86")
+	assert(v.ToTime() == time.Time{}, "11")
+	v = New("1abc")
+	assert(v.ToTime() == time.Time{}, "12")
+	v = New(float32(-86.2))
+	assert(v.ToTime() == time.Unix(0, -86), "13")
+	v = New(-86.1)
+	assert(v.ToTime() == time.Unix(0, -86), "14")
+
+	tt := time.Now()
+	v = New(tt)
+	assert(v.ToTime().UnixNano() == tt.UnixNano(), "14")
 }
 
 func Test_UnmarshalJson(t *testing.T) {

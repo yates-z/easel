@@ -2,6 +2,7 @@ package config
 
 import (
 	"sync"
+	"time"
 
 	"github.com/yates-z/easel/core/variant"
 	"github.com/yates-z/easel/logger"
@@ -49,6 +50,10 @@ func (c *config) Get(path string) (variant.Variant, bool) {
 	return c.content.Get(path)
 }
 
+func (c *config) AllSettings() map[string]any {
+	return c.content.content
+}
+
 // SetInt sets an int value at the specified path.
 func (c *config) SetInt(path string, value int) error {
 	c.mu.Lock()
@@ -72,6 +77,13 @@ func (c *config) SetString(path string, value string) error {
 
 // SetBool sets a bool value at the specified path.
 func (c *config) SetBool(path string, value bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.content.Set(path, value)
+}
+
+// SetTime sets a time.Time value at the specified path.
+func (c *config) SetTime(path string, value time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.content.Set(path, value)

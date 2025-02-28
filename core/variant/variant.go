@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"time"
 )
 
 const (
@@ -14,11 +15,17 @@ const (
 )
 
 type Variant struct {
-	Type Kind
-	Data []byte
+	Type   Kind
+	Data   []byte
+	layout string
 }
 
 var Nil = Variant{Type: Invalid}
+
+func (v *Variant) SetLayout(layout string) *Variant {
+	v.layout = layout
+	return v
+}
 
 func (v Variant) String() string {
 	return fmt.Sprintf("Variant(%v, %v)", v.Type, v.Data)
@@ -73,6 +80,13 @@ func (v Variant) ToFloat64() float64 {
 	return 0
 }
 
+func (v Variant) ToTime() time.Time {
+	if fn := Strategies.time.Get(v.Type); fn != nil {
+		return fn(v)
+	}
+	return time.Time{}
+}
+
 func (v Variant) Equal(other any) bool {
 	variant := New(other)
 	return reflect.DeepEqual(v, variant)
@@ -104,8 +118,9 @@ func (v Variant) MarshalJSON() ([]byte, error) {
 
 func New(v any) Variant {
 	variant := Variant{
-		Type: Invalid,
-		Data: make([]byte, 0, 8),
+		Type:   Invalid,
+		Data:   make([]byte, 0, 8),
+		layout: "2006/01/02 15:04:05",
 	}
 
 	switch v := v.(type) {
@@ -175,6 +190,12 @@ func New(v any) Variant {
 		variant.Type = Float64
 		variant.Data = append(variant.Data, make([]byte, 8)...)
 		binary.BigEndian.PutUint64(variant.Data, math.Float64bits(v))
+	case time.Time:
+		data, err := v.MarshalBinary()
+		if err == nil {
+			variant.Type = Time
+			variant.Data = data
+		}
 	}
 	return variant
 }

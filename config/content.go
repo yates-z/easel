@@ -95,7 +95,7 @@ func mergeSlice(existing, other []any) {
 }
 
 // Get retrieves a configuration value by its key, supporting nested keys using dot notation (e.g., "database.host")
-func (c *Content) Get(path string) (variant.Variant, bool) {
+func (c *Content) Get(path string) variant.Variant {
 
 	parts := parsePath(path)
 
@@ -103,32 +103,32 @@ func (c *Content) Get(path string) (variant.Variant, bool) {
 
 	for _, part := range parts {
 		if part.kind == Index {
-			index, error := strconv.Atoi(part.value)
-			if error != nil {
-				return variant.Nil, false
+			index, err := strconv.Atoi(part.value)
+			if err != nil {
+				return variant.Nil
 			}
 			currentSlice, ok := current.([]any)
 			if !ok || index >= len(currentSlice) || index < 0 {
-				return variant.Nil, false
+				return variant.Nil
 			}
 			current = currentSlice[index]
 		} else if part.kind == Key {
 			currentMap, ok := current.(map[string]any)
 			if !ok {
-				return variant.Nil, false
+				return variant.Nil
 			}
 			val, exists := currentMap[part.value]
 			if !exists {
-				return variant.Nil, false
+				return variant.Nil
 			}
 			current = val
 		}
 	}
 
-	return variant.New(current), false
+	return variant.New(current)
 }
 
-// set sets a configuration value by its key, supporting nested keys using dot notation (e.g., "database.host").
+// Set sets a configuration value by its key, supporting nested keys using dot notation (e.g., "database.host").
 func (c *Content) Set(path string, value any) error {
 
 	parts := parsePath(path)
@@ -138,9 +138,9 @@ func (c *Content) Set(path string, value any) error {
 	for i, part := range parts {
 		// fmt.Printf("parent: %+v, current: %+v\n\n", parent, current)
 		if part.kind == Index {
-			index, error := strconv.Atoi(part.value)
-			if error != nil {
-				return error
+			index, err := strconv.Atoi(part.value)
+			if err != nil {
+				return err
 			}
 
 			currentSlice, ok := current.([]any)

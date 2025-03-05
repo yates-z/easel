@@ -13,7 +13,7 @@ func Load(path string) {
 	)
 }
 
-func Get(path string) (variant.Variant, bool) {
+func Get(path string) variant.Variant {
 	return defaultConfig.Get(path)
 }
 

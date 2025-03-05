@@ -43,7 +43,7 @@ func New(opts ...Option) *config {
 	return c
 }
 
-func (c *config) Get(path string) (variant.Variant, bool) {
+func (c *config) Get(path string) variant.Variant {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 

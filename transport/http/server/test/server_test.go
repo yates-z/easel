@@ -3,13 +3,14 @@ package test
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"testing"
+
 	"github.com/yates-z/easel/transport/grpc/server/test/api"
 	"github.com/yates-z/easel/transport/http/server"
 	"github.com/yates-z/easel/transport/http/server/adapter"
 	"github.com/yates-z/easel/transport/http/server/middlewares/logging"
 	"github.com/yates-z/easel/transport/http/server/middlewares/recovery"
-	"net/http"
-	"testing"
 )
 
 type HelloService struct {
@@ -35,5 +36,6 @@ func TestServer(t *testing.T) {
 	service := &HelloService{}
 	s.GET("/hello/{name}", Hello)
 	s.POST("/hello/{$}", adapter.GRPC(service.SayHello))
+	s.GET("/user/test", adapter.GRPC(service.SayHello))
 	s.MustRun()
 }

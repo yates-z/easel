@@ -2,15 +2,16 @@ package server
 
 import (
 	"crypto/tls"
+	"net"
+	"slices"
+
+	"github.com/yates-z/easel/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
-	"log"
-	"net"
-	"slices"
 )
 
 type ServerOption func(*Server)
@@ -153,7 +154,7 @@ func (s *Server) Listen(network, address string) error {
 		return err
 	}
 	s.listener = listener
-	log.Printf("[gRPC] server listening on: %s", listener.Addr().String())
+	logger.Infof("[gRPC] server listening on: %s", listener.Addr().String())
 	return nil
 }
 
@@ -164,7 +165,7 @@ func (s *Server) Run() error {
 			return err
 		}
 		s.listener = listener
-		log.Printf("[gRPC] server listening on: %s", s.listener.Addr().String())
+		logger.Infof("[gRPC] server listening on: %s", s.listener.Addr().String())
 	}
 	s.health.Resume()
 	return s.Serve(s.listener)
@@ -174,18 +175,18 @@ func (s *Server) MustRun() {
 	if s.listener == nil {
 		listener, err := net.Listen(s.network, s.address)
 		if err != nil {
-			log.Fatal(err)
+			logger.Fatal(err)
 		}
 		s.listener = listener
-		log.Printf("[gRPC] server listening on: %s", s.listener.Addr().String())
+		logger.Infof("[gRPC] server listening on: %s", s.listener.Addr().String())
 	}
 	s.health.Resume()
-	log.Fatal(s.Serve(s.listener))
+	logger.Fatal(s.Serve(s.listener))
 }
 
 func (s *Server) Stop() error {
 	s.health.Shutdown()
 	s.GracefulStop()
-	log.Println("[gRPC] server stopping")
+	logger.Info("[gRPC] server stopping")
 	return nil
 }

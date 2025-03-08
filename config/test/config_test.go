@@ -8,10 +8,10 @@ import (
 
 func TestConfig(t *testing.T) {
 	config.Load(config.DefaultConfigPath)
-	host, _ := config.Get("databases.main.port")
+	host := config.Get("databases.main.port")
 	println(host.ToInt())
 
-	version, _ := config.Get("databases.main.version[0][1]")
+	version := config.Get("databases.main.version[0][1]")
 	println(version.ToString())
 }
 
@@ -19,7 +19,7 @@ func TestSetConfig(t *testing.T) {
 	config.Load(config.DefaultConfigPath)
 	// test setting a new key
 	config.SetInt("mytest.main.port", 3306)
-	port, _ := config.Get("mytest.main.port")
+	port := config.Get("mytest.main.port")
 	println(port.ToInt() == 3306)
 
 	// test setting a new key with an array index
@@ -28,7 +28,7 @@ func TestSetConfig(t *testing.T) {
 		println(err.Error())
 		return
 	}
-	version, _ := config.Get("mytest.version[0]")
+	version := config.Get("mytest.version[0]")
 	println(version.ToString() == "1.0.0")
 }
 
@@ -40,22 +40,22 @@ func TestSetConfig2(t *testing.T) {
 		println(err.Error())
 		return
 	}
-	version, _ := config.Get("mytest.version[1][0]")
+	version := config.Get("mytest.version[1][0]")
 	println(version.ToString() == "2.0.0")
-	env_gopath, _ := config.Get("GOPATH")
+	env_gopath := config.Get("GOPATH")
 	println(env_gopath.ToString())
 }
 
 func TestJsonConfig(t *testing.T) {
 	config.Load("config.json")
-	namespace, _ := config.Get("namespace")
+	namespace := config.Get("namespace")
 	println(namespace.ToInt() == 1111)
-	filePath, _ := config.Get("filePath")
+	filePath := config.Get("filePath")
 	println(filePath.ToString())
-	phone, _ := config.Get("address[0].phone")
+	phone := config.Get("address[0].phone")
 	println(phone.ToString())
 
-	band, _ := config.Get("myCar.band")
+	band := config.Get("myCar.band")
 	println(band.ToString())
 
 }

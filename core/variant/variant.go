@@ -120,7 +120,7 @@ func New(v any) Variant {
 	variant := Variant{
 		Type:   Invalid,
 		Data:   make([]byte, 0, 8),
-		layout: "2006/01/02 15:04:05",
+		layout: "2006-01-02T15:04:05Z",
 	}
 
 	switch v := v.(type) {

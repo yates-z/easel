@@ -362,3 +362,11 @@ func Test_UnmarshalJson(t *testing.T) {
 	fmt.Println(m["is_male"].ToBool())
 	fmt.Println(m)
 }
+
+func Test_Equal(t *testing.T) {
+	v := Nil
+	fmt.Println(v.Equal(nil))
+	v1 := New(123)
+	fmt.Println(v1.Equal(123))
+	fmt.Println(v1.Equal(v1))
+}

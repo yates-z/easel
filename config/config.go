@@ -50,12 +50,63 @@ func (c *config) Get(path string) variant.Variant {
 	return c.content.Get(path)
 }
 
+func (c *config) GetDefault(path string, _default any) variant.Variant {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.content.GetDefault(path, _default)
+}
+
+func (c *config) GetBool(path string, _default bool) bool {
+	v := c.GetDefault(path, _default)
+	return v.ToBool()
+}
+
+func (c *config) GetString(path string, _default string) string {
+	v := c.GetDefault(path, _default)
+	return v.ToString()
+}
+
+func (c *config) GetInt(path string, _default int) int {
+	v := c.GetDefault(path, _default)
+	return v.ToInt()
+}
+
+func (c *config) GetUint(path string, _default uint) uint {
+	v := c.GetDefault(path, _default)
+	return v.ToUint()
+}
+
+func (c *config) GetFloat32(path string, _default float32) float32 {
+	v := c.GetDefault(path, _default)
+	return v.ToFloat32()
+}
+
+func (c *config) GetFloat64(path string, _default float64) float64 {
+	v := c.GetDefault(path, _default)
+	return v.ToFloat64()
+}
+
 func (c *config) AllSettings() map[string]any {
 	return c.content.content
 }
 
 // SetInt sets an int value at the specified path.
 func (c *config) SetInt(path string, value int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.content.Set(path, value)
+}
+
+// SetUint sets an uint value at the specified path.
+func (c *config) SetUint(path string, value uint) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.content.Set(path, value)
+}
+
+// SetFloat32 sets a float32 value at the specified path.
+func (c *config) SetFloat32(path string, value float32) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.content.Set(path, value)

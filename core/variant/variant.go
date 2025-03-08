@@ -20,7 +20,7 @@ type Variant struct {
 	layout string
 }
 
-var Nil = Variant{Type: Invalid}
+var Nil = Variant{Type: Invalid, Data: make([]byte, 0, 8)}
 
 func (v *Variant) SetLayout(layout string) *Variant {
 	v.layout = layout
@@ -88,7 +88,11 @@ func (v Variant) ToTime() time.Time {
 }
 
 func (v Variant) Equal(other any) bool {
+	if v, ok := other.(Variant); ok {
+		return reflect.DeepEqual(v, other)
+	}
 	variant := New(other)
+	variant.layout = v.layout
 	return reflect.DeepEqual(v, variant)
 }
 

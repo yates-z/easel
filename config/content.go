@@ -128,6 +128,14 @@ func (c *Content) Get(path string) variant.Variant {
 	return variant.New(current)
 }
 
+func (c *Content) GetDefault(path string, _default any) variant.Variant {
+	value := c.Get(path)
+	if value.Equal(nil) {
+		return variant.New(_default)
+	}
+	return value
+}
+
 // Set sets a configuration value by its key, supporting nested keys using dot notation (e.g., "database.host").
 func (c *Content) Set(path string, value any) error {
 

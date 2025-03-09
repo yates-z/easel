@@ -297,8 +297,22 @@ func (c *Context) GetStringMapStringSlice(key string) (smss map[string][]string)
 /********* REQUEST ********/
 /***************************/
 
+// Param returns the value for the named path wildcard in the [ServeMux] pattern
+// that matched the request.
 func (c *Context) Param(key string) string {
 	return c.Request.PathValue(key)
+}
+
+// Query gets the first value associated with the given key.
+// If there are no values associated with the key, Get returns
+// the empty string.
+func (c *Context) Query(key string) string {
+	return c.Request.URL.Query().Get(key)
+}
+
+func (c *Context) QueryArray(key string) ([]string, bool) {
+	values, ok := c.Request.URL.Query()[key]
+	return values, ok
 }
 
 func (c *Context) FullPath() string {

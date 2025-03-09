@@ -17,13 +17,11 @@ type HelloService struct {
 }
 
 func (s *HelloService) SayHello(ctx context.Context, in *api.HelloRequest) (*api.HelloResponse, error) {
-
 	return &api.HelloResponse{Replay: "hello, " + in.Name}, nil
 }
 
 func Hello(ctx *server.Context) error {
-	//time.Sleep(3 * time.Second)
-	fmt.Println("hello world")
+	fmt.Println(ctx.Request.URL.Query()["id"])
 	return ctx.JSON(http.StatusOK, map[string]string{"hello": ctx.Param("name")})
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/yates-z/easel/transport"
 	"html/template"
 	"net"
 	"net/http"
@@ -13,28 +14,7 @@ import (
 
 	"github.com/yates-z/easel/core/pool"
 	"github.com/yates-z/easel/logger"
-	"github.com/yates-z/easel/logger/backend"
 	templ "github.com/yates-z/easel/transport/http/server/template"
-)
-
-var log = logger.NewLogger(
-	logger.WithLevel(logger.DebugLevel),
-	logger.WithBackends(logger.AnyLevel, backend.OSBackend().Build()),
-	logger.WithSeparator(logger.AnyLevel, "    "),
-	logger.WithFields(logger.AnyLevel,
-		logger.DatetimeField("2006/01/02 15:04:03").Key("datetime"),
-	),
-	logger.WithFields(logger.DebugLevel|logger.InfoLevel,
-		logger.LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(logger.Green),
-	),
-	logger.WithFields(logger.WarnLevel,
-		logger.LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(logger.Yellow),
-	),
-	logger.WithFields(logger.ErrorLevel|logger.FatalLevel|logger.PanicLevel,
-		logger.LevelField().Key("level").Upper().Prefix("[").Suffix("]").Color(logger.Red),
-	),
-	logger.WithFields(logger.AnyLevel, logger.MessageField().Key("msg")),
-	logger.WithEncoders(logger.AnyLevel, logger.PlainEncoder),
 )
 
 type ServerOption func(*Server)
@@ -101,7 +81,7 @@ func New(opts ...ServerOption) *Server {
 	server := &Server{
 		network:   "tcp",
 		address:   ":80",
-		log:       log,
+		log:       transport.Logger,
 		showInfo:  false,
 		htmlTempl: templ.New(),
 	}
@@ -110,6 +90,13 @@ func New(opts ...ServerOption) *Server {
 		return newContext(server)
 	})
 	server.errorHandler = func(ctx *Context, err error) {
+		if ctx.GetHeader("Content-Type") == "application/json" {
+			ctx.JSON(http.StatusBadRequest, map[string]interface{}{
+				"code":    http.StatusBadRequest,
+				"message": err.Error(),
+			})
+			return
+		}
 		http.Error(ctx.Response, err.Error(), http.StatusBadRequest)
 	}
 	for _, o := range opts {

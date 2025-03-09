@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/tls"
+	"github.com/yates-z/easel/transport"
 	"net"
 	"slices"
 
@@ -114,6 +115,9 @@ type Server struct {
 	// You can use custom compressor or build-in 'gzip'.
 	compressor encoding.Compressor
 
+	// logger is used to record logs.
+	logger logger.Logger
+
 	//_opts are grpc options for init.
 	_opts []grpc.ServerOption
 }
@@ -126,6 +130,7 @@ func NewServer(opts ...ServerOption) *Server {
 		allowHealthCheck: true,
 		health:           health.NewServer(),
 		compressor:       nil,
+		logger:           transport.Logger,
 	}
 	for _, opt := range opts {
 		opt(server)
@@ -154,7 +159,7 @@ func (s *Server) Listen(network, address string) error {
 		return err
 	}
 	s.listener = listener
-	logger.Infof("[gRPC] server listening on: %s", listener.Addr().String())
+	s.logger.Infof("[gRPC] server listening on: %s", listener.Addr().String())
 	return nil
 }
 
@@ -165,7 +170,7 @@ func (s *Server) Run() error {
 			return err
 		}
 		s.listener = listener
-		logger.Infof("[gRPC] server listening on: %s", s.listener.Addr().String())
+		s.logger.Infof("[gRPC] server listening on: %s", s.listener.Addr().String())
 	}
 	s.health.Resume()
 	return s.Serve(s.listener)
@@ -175,18 +180,18 @@ func (s *Server) MustRun() {
 	if s.listener == nil {
 		listener, err := net.Listen(s.network, s.address)
 		if err != nil {
-			logger.Fatal(err)
+			s.logger.Fatal(err)
 		}
 		s.listener = listener
-		logger.Infof("[gRPC] server listening on: %s", s.listener.Addr().String())
+		s.logger.Infof("[gRPC] server listening on: %s", s.listener.Addr().String())
 	}
 	s.health.Resume()
-	logger.Fatal(s.Serve(s.listener))
+	s.logger.Fatal(s.Serve(s.listener))
 }
 
 func (s *Server) Stop() error {
 	s.health.Shutdown()
 	s.GracefulStop()
-	logger.Info("[gRPC] server stopping")
+	s.logger.Info("[gRPC] server stopping")
 	return nil
 }

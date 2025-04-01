@@ -43,14 +43,13 @@ type Context struct {
 }
 
 func newContext(s *Server) *Context {
-	return &Context{
-		server: s,
-	}
+	ctx := &Context{server: s, ctx: context.Background()}
+	return ctx
 }
 
 func (c *Context) WithBaseContext(ctx context.Context) {
 	if ctx == nil {
-		ctx = context.Background()
+		return
 	}
 	c.ctx = ctx
 }
@@ -63,7 +62,7 @@ func (c *Context) init(req *http.Request, resp http.ResponseWriter) {
 func (c *Context) reset() {
 	c.Request = nil
 	c.Response.reset(nil)
-	c.ctx = nil
+	c.ctx = context.Background()
 	c.fullPath = ""
 	c.sameSite = 0
 	c.storage = nil

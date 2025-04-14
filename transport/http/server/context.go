@@ -506,6 +506,14 @@ func (c *Context) Proto(code int, data any) error {
 	return errors.New("not a proto message")
 }
 
+// Data writes some data into the body stream and updates the HTTP code.
+func (c *Context) Data(code int, contentType string, data []byte) error {
+	c.SetContentType([]string{contentType})
+	c.SetStatus(code)
+	_, err := c.Response.Write(data)
+	return err
+}
+
 // Redirect returns an HTTP redirect to the specific location.
 func (c *Context) Redirect(url string) {
 	http.Redirect(c.Response, c.Request, url, http.StatusMovedPermanently)

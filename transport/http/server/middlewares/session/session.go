@@ -1,6 +1,8 @@
 package session
 
 import (
+	"net/http"
+
 	"github.com/yates-z/easel/auth/authentication/session"
 	"github.com/yates-z/easel/transport/http/server"
 )
@@ -18,14 +20,14 @@ func Middleware(sm *session.SessionManager) server.Middleware {
 			// Get session_id from cookies
 			sessionID, err := ctx.GetCookie(CookieName)
 			if err != nil || sessionID == "" {
-				ctx.Redirect(RedirectUrl)
+				ctx.String(http.StatusUnauthorized, "Unauthorized")
 				return nil
 			}
 
 			// Load the session
 			_session, err := sm.GetSession(sessionID)
 			if err != nil {
-				ctx.Redirect(RedirectUrl)
+				ctx.String(http.StatusUnauthorized, "Unauthorized")
 				return nil
 			}
 

@@ -26,7 +26,7 @@ func Hello(ctx *server.Context) error {
 }
 
 func TestServer(t *testing.T) {
-	s := server.New(
+	s := server.NewServer(
 		server.Address(":8000"),
 		server.ShowInfo(),
 		server.Middlewares(recovery.Middleware(), logging.Middleware()),
@@ -35,5 +35,5 @@ func TestServer(t *testing.T) {
 	s.GET("/hello/{name}", Hello)
 	s.POST("/hello/{$}", adapter.GRPC(service.SayHello))
 	s.GET("/user/test", adapter.GRPC(service.SayHello))
-	s.MustRun()
+	s.MustStart(context.Background())
 }

@@ -4,17 +4,15 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/yates-z/easel/core/pool"
+	"github.com/yates-z/easel/logger"
 	"github.com/yates-z/easel/transport"
+	templ "github.com/yates-z/easel/transport/http/server/template"
+	"github.com/yates-z/easel/utils/host"
 	"html/template"
 	"net"
 	"net/http"
-	"os"
-	"os/signal"
-	"time"
-
-	"github.com/yates-z/easel/core/pool"
-	"github.com/yates-z/easel/logger"
-	templ "github.com/yates-z/easel/transport/http/server/template"
+	"net/url"
 )
 
 type ServerOption func(*Server)
@@ -77,7 +75,7 @@ type Server struct {
 	errorHandler func(ctx *Context, err error)
 }
 
-func New(opts ...ServerOption) *Server {
+func NewServer(opts ...ServerOption) *Server {
 	server := &Server{
 		network:   "tcp",
 		address:   ":80",
@@ -150,22 +148,32 @@ func (s *Server) SetErrorHandler(f func(*Context, error)) {
 	s.errorHandler = f
 }
 
-func (s *Server) Run() error {
+func (s *Server) Start(ctx context.Context) error {
 	if s.listener == nil {
 		listener, err := net.Listen(s.network, s.address)
 		if err != nil {
 			return err
 		}
 		s.listener = listener
-		s.log.Infof("[http] server listening on: %s", s.listener.Addr().String())
 	}
+	// http.Server.BaseContext：定义服务器级别的上下文，所有请求都会继承该上下文。
+	s.BaseContext = func(net.Listener) context.Context {
+		return ctx
+	}
+	s.log.Infof("[http] server listening on: %s", s.listener.Addr().String())
+	var err error
 	if s.tlsConf != nil {
-		return s.ServeTLS(s.listener, "", "")
+		err = s.ServeTLS(s.listener, "", "")
+	} else {
+		err = s.Serve(s.listener)
 	}
-	return s.Serve(s.listener)
+	if !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
 
-func (s *Server) MustRun() {
+func (s *Server) MustStart(ctx context.Context) {
 	if s.listener == nil {
 		listener, err := net.Listen(s.network, s.address)
 		if err != nil {
@@ -173,6 +181,9 @@ func (s *Server) MustRun() {
 		}
 		s.listener = listener
 		s.log.Infof("[http] server listening on: %s", s.listener.Addr().String())
+	}
+	s.BaseContext = func(net.Listener) context.Context {
+		return ctx
 	}
 	if s.tlsConf != nil {
 		if err := s.ServeTLS(s.listener, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -185,21 +196,23 @@ func (s *Server) MustRun() {
 	}
 }
 
-// Start the HTTP server.
-func (s *Server) Start(ctx context.Context) {
-	go s.MustRun()
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
-	<-stop
-
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if err := s.Shutdown(ctx); err != nil {
-		s.log.Fatalf("[HTTP] server Shutdown error: %v", err)
+func (s *Server) Endpoint() (*url.URL, error) {
+	if s.listener == nil {
+		listener, err := net.Listen(s.network, s.address)
+		if err != nil {
+			return nil, err
+		}
+		s.listener = listener
 	}
-
-	s.log.Info("[HTTP] server gracefully stopped")
+	addr, err := host.Extract(s.address, s.listener)
+	if err != nil {
+		return nil, err
+	}
+	scheme := "http"
+	if s.tlsConf != nil {
+		scheme = "https"
+	}
+	return &url.URL{Scheme: scheme, Host: addr}, nil
 }
 
 // Close immediately closes all active net.
@@ -208,9 +221,16 @@ func (s *Server) Close() error {
 	return s.Server.Close()
 }
 
-// Shutdown gracefully shuts down the server without interrupting any
-// // active connections..
-func (s *Server) Shutdown(ctx context.Context) error {
+// Stop gracefully shuts down the server without interrupting any
+// active connections.
+func (s *Server) Stop(ctx context.Context) error {
 	s.log.Info("[HTTP] server is stopping")
-	return s.Server.Shutdown(ctx)
+	err := s.Server.Shutdown(ctx)
+	if err != nil {
+		if ctx.Err() != nil {
+			s.log.Warn("[HTTP] server couldn't stop gracefully in time, doing force stop")
+			err = s.Close()
+		}
+	}
+	return err
 }

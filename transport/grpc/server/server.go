@@ -1,9 +1,13 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"github.com/yates-z/easel/transport"
+	"github.com/yates-z/easel/utils/host"
+	"google.golang.org/grpc/admin"
 	"net"
+	"net/url"
 	"slices"
 
 	"github.com/yates-z/easel/logger"
@@ -35,7 +39,7 @@ func Address(addr string) ServerOption {
 // TLSConfig with TLS config.
 func TLSConfig(c *tls.Config) ServerOption {
 	return func(s *Server) {
-		s._opts = append(s._opts, grpc.Creds(credentials.NewTLS(c)))
+		s.tlsConf = c
 	}
 }
 
@@ -84,6 +88,8 @@ func GRPCOptions(opts ...grpc.ServerOption) ServerOption {
 type Server struct {
 	*grpc.Server
 
+	ctx context.Context
+
 	// network must be "tcp", "tcp4", "tcp6", "unix" or "unixpacket".
 	// Check net.Listen for more detail.
 	network string
@@ -91,6 +97,7 @@ type Server struct {
 	// address optionally specifies the address for the server to listen on.
 	// in the form "host:port". If empty, ":http" (port 80) is used.
 	address  string
+	tlsConf  *tls.Config
 	listener net.Listener
 
 	// interceptors collect grpc interceptors that have same effect on both unary and stream req.
@@ -120,10 +127,15 @@ type Server struct {
 
 	//_opts are grpc options for init.
 	_opts []grpc.ServerOption
+
+	// The returned cleanup function should be called to clean up the resources
+	// allocated for the service handlers after the server is stopped.
+	cleanup func()
 }
 
 func NewServer(opts ...ServerOption) *Server {
 	server := &Server{
+		ctx:              context.Background(),
 		network:          "tcp",
 		address:          ":0",
 		allowReflection:  false,
@@ -141,6 +153,9 @@ func NewServer(opts ...ServerOption) *Server {
 	}
 	server._opts = append(server._opts, grpc.ChainUnaryInterceptor(server.unaryInterceptors...))
 	server._opts = append(server._opts, grpc.ChainStreamInterceptor(server.streamInterceptors...))
+	if server.tlsConf != nil {
+		server._opts = append(server._opts, grpc.Creds(credentials.NewTLS(server.tlsConf)))
+	}
 
 	server.Server = grpc.NewServer(server._opts...)
 
@@ -150,6 +165,8 @@ func NewServer(opts ...ServerOption) *Server {
 	if server.allowReflection {
 		reflection.Register(server)
 	}
+	server.cleanup, _ = admin.Register(server.Server)
+
 	return server
 }
 
@@ -163,20 +180,40 @@ func (s *Server) Listen(network, address string) error {
 	return nil
 }
 
-func (s *Server) Run() error {
+func (s *Server) Endpoint() (*url.URL, error) {
+	if s.listener == nil {
+		listener, err := net.Listen(s.network, s.address)
+		if err != nil {
+			return nil, err
+		}
+		s.listener = listener
+	}
+	addr, err := host.Extract(s.address, s.listener)
+	if err != nil {
+		return nil, err
+	}
+	scheme := "grpc"
+	if s.tlsConf != nil {
+		scheme = "grpcs"
+	}
+	return &url.URL{Scheme: scheme, Host: addr}, nil
+}
+
+func (s *Server) Start(ctx context.Context) error {
 	if s.listener == nil {
 		listener, err := net.Listen(s.network, s.address)
 		if err != nil {
 			return err
 		}
 		s.listener = listener
-		s.logger.Infof("[gRPC] server listening on: %s", s.listener.Addr().String())
 	}
+	s.ctx = ctx
+	s.logger.Infof("[gRPC] server listening on: %s", s.listener.Addr().String())
 	s.health.Resume()
 	return s.Serve(s.listener)
 }
 
-func (s *Server) MustRun() {
+func (s *Server) MustStart(ctx context.Context) {
 	if s.listener == nil {
 		listener, err := net.Listen(s.network, s.address)
 		if err != nil {
@@ -185,13 +222,28 @@ func (s *Server) MustRun() {
 		s.listener = listener
 		s.logger.Infof("[gRPC] server listening on: %s", s.listener.Addr().String())
 	}
+	s.ctx = ctx
 	s.health.Resume()
 	s.logger.Fatal(s.Serve(s.listener))
 }
 
-func (s *Server) Stop() error {
+func (s *Server) Stop(ctx context.Context) error {
+	if s.cleanup != nil {
+		s.cleanup()
+	}
 	s.health.Shutdown()
-	s.GracefulStop()
-	s.logger.Info("[gRPC] server stopping")
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.logger.Info("[gRPC] server stopping")
+		s.GracefulStop()
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		s.logger.Warn("[gRPC] server couldn't stop gracefully in time, doing force stop")
+		s.Server.Stop()
+	}
 	return nil
 }
